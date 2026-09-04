@@ -42,44 +42,37 @@ jobs:
         run: |
           cd benchmarks
           npm run benchmark:vector-search
-        continue-on-error: true
 
       - name: Run Agent Operations Benchmarks
         run: |
           cd benchmarks
           npm run benchmark:agent-operations
-        continue-on-error: true
 
       - name: Run Memory Operations Benchmarks
         run: |
           cd benchmarks
           npm run benchmark:memory
-        continue-on-error: true
 
       - name: Run Task Orchestration Benchmarks
         run: |
           cd benchmarks
           npm run benchmark:task-orchestration
-        continue-on-error: true
 
       - name: Run Attention Mechanism Benchmarks
         run: |
           cd benchmarks
           npm run benchmark:attention
-        continue-on-error: true
 
       - name: Run GNN Benchmarks
         run: |
           cd benchmarks
           npm run benchmark:gnn
-        continue-on-error: true
 
       - name: Run Regression Analysis
         id: regression
         run: |
           cd benchmarks
           npm run benchmark:regression
-        continue-on-error: true
 
       - name: Generate HTML Report
         run: |
@@ -87,6 +80,7 @@ jobs:
           npm run benchmark:report
 
       - name: Upload Benchmark Results
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: benchmark-results-${{ github.sha }}
@@ -153,13 +147,6 @@ jobs:
               repo: context.repo.repo,
               body: body
             });
-
-      - name: Fail if regression detected
-        if: steps.regression.outcome == 'failure'
-        run: |
-          echo "⚠️ Performance regression detected!"
-          echo "Review the regression report for details."
-          exit 1
 
       - name: Update benchmark baseline (main branch only)
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
