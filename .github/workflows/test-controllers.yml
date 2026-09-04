@@ -37,7 +37,7 @@ jobs:
         working-directory: agentic-flow
 
       - name: Run unit tests
-        run: agentic-flow/node_modules/.bin/vitest run --root . tests/unit/controllers
+        run: agentic-flow/node_modules/.bin/vitest run --root . --config tests/controllers.vitest.config.mjs tests/unit/controllers
 
       - name: Run integration tests
-        run: agentic-flow/node_modules/.bin/vitest run --root . tests/integration/controllers
+        run: agentic-flow/node_modules/.bin/vitest run --root . --config tests/controllers.vitest.config.mjs tests/integration/controllers
