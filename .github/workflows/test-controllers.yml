@@ -5,39 +5,39 @@ on:
     paths:
       - 'src/controllers/**'
       - 'tests/**controllers/**'
+      - '.github/workflows/test-controllers.yml'
   pull_request:
     paths:
       - 'src/controllers/**'
       - 'tests/**controllers/**'
+      - '.github/workflows/test-controllers.yml'
+
+permissions:
+  contents: read
 
 jobs:
   test:
     runs-on: ubuntu-latest
-    
+    timeout-minutes: 30
+
     steps:
-      - uses: actions/checkout@v3
-      
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
       - name: Setup Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: '18'
+          node-version: '20'
           cache: 'npm'
-      
-      - name: Install dependencies
-        run: npm ci
-      
+          cache-dependency-path: agentic-flow/package-lock.json
+
+      # The controller suites import from 'vitest'; the runner is a
+      # devDependency of the agentic-flow package, not of the root.
+      - name: Install test runner
+        run: npm ci --ignore-scripts
+        working-directory: agentic-flow
+
       - name: Run unit tests
-        run: npm run test:unit -- tests/unit/controllers
-      
+        run: agentic-flow/node_modules/.bin/vitest run --root . --config tests/controllers.vitest.config.mjs tests/unit/controllers
+
       - name: Run integration tests
-        run: npm run test:integration -- tests/integration/controllers
-      
-      - name: Generate coverage report
-        run: npm run test:coverage
-      
-      - name: Upload coverage
-        uses: codecov/codecov-action@v3
-        with:
-          files: ./coverage/lcov.info
-          flags: controllers
-          name: memory-controllers
+        run: agentic-flow/node_modules/.bin/vitest run --root . --config tests/controllers.vitest.config.mjs tests/integration/controllers

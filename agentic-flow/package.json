@@ -40,7 +40,7 @@
     "build:wasm:clean": "rm -rf ../reasoningbank/crates/reasoningbank-wasm/pkg && rm -rf wasm/reasoningbank",
     "dev": "tsx src/index.ts",
     "prepublishOnly": "npm run build",
-    "test": "npm run test:retry && npm run test:logging",
+    "test": "vitest run",
     "test:retry": "tsx validation/quick-wins/test-retry.ts",
     "test:logging": "tsx validation/quick-wins/test-logging.ts",
     "test:wasm:e2e": "tsx validation/test-wasm-e2e.ts",

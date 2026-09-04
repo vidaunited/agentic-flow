@@ -6,13 +6,13 @@ This directory contains all code quality and development tooling configurations 
 
 ### Linting & Formatting
 
-- **`.eslintrc.strict.js`** - Strict ESLint rules for TypeScript
+- **`.eslintrc.strict.cjs`** - Strict ESLint rules for TypeScript
   - Enforces explicit types
   - No `any` type allowed
   - Complexity and size limits
   - Security best practices
 
-- **`.prettierrc.js`** - Prettier code formatting rules
+- **`.prettierrc.cjs`** - Prettier code formatting rules
   - 2 space indentation
   - Single quotes
   - 100 character line width
@@ -29,7 +29,7 @@ This directory contains all code quality and development tooling configurations 
 
 ### Testing
 
-- **`jest.config.js`** - Jest test configuration
+- **`jest.config.cjs`** - Jest test configuration
   - Coverage thresholds (80% minimum)
   - TypeScript support via ts-jest
   - Coverage reporting
@@ -180,8 +180,8 @@ npm run typecheck:strict
 ### Adjusting Rules
 
 Edit the configuration files:
-- ESLint rules: `.eslintrc.strict.js`
-- Prettier options: `.prettierrc.js`
+- ESLint rules: `.eslintrc.strict.cjs`
+- Prettier options: `.prettierrc.cjs`
 - TypeScript settings: `../agentic-flow/config/tsconfig.strict.json`
 
 ### Disabling Rules
@@ -196,7 +196,7 @@ const data: any = externalLibrary.getData();
 ### Adding Exceptions
 
 Update ignore patterns:
-- ESLint: `ignorePatterns` in `.eslintrc.strict.js`
+- ESLint: `ignorePatterns` in `.eslintrc.strict.cjs`
 - Prettier: Add to `.prettierignore`
 - TypeScript: `exclude` in `tsconfig.strict.json`
 

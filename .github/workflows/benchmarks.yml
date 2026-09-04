@@ -20,12 +20,12 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
 
       - name: Setup Node.js ${{ matrix.node-version }}
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: ${{ matrix.node-version }}
           cache: 'npm'
@@ -42,44 +42,37 @@ jobs:
         run: |
           cd benchmarks
           npm run benchmark:vector-search
-        continue-on-error: true
 
       - name: Run Agent Operations Benchmarks
         run: |
           cd benchmarks
           npm run benchmark:agent-operations
-        continue-on-error: true
 
       - name: Run Memory Operations Benchmarks
         run: |
           cd benchmarks
           npm run benchmark:memory
-        continue-on-error: true
 
       - name: Run Task Orchestration Benchmarks
         run: |
           cd benchmarks
           npm run benchmark:task-orchestration
-        continue-on-error: true
 
       - name: Run Attention Mechanism Benchmarks
         run: |
           cd benchmarks
           npm run benchmark:attention
-        continue-on-error: true
 
       - name: Run GNN Benchmarks
         run: |
           cd benchmarks
           npm run benchmark:gnn
-        continue-on-error: true
 
       - name: Run Regression Analysis
         id: regression
         run: |
           cd benchmarks
           npm run benchmark:regression
-        continue-on-error: true
 
       - name: Generate HTML Report
         run: |
@@ -87,7 +80,8 @@ jobs:
           npm run benchmark:report
 
       - name: Upload Benchmark Results
-        uses: actions/upload-artifact@v4
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: benchmark-results-${{ github.sha }}
           path: |
@@ -97,7 +91,7 @@ jobs:
           retention-days: 90
 
       - name: Upload HTML Report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: benchmark-report-${{ github.sha }}
           path: benchmarks/reports/benchmark-report.html
@@ -105,7 +99,7 @@ jobs:
 
       - name: Comment PR with Results
         if: github.event_name == 'pull_request'
-        uses: actions/github-script@v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
         with:
           script: |
             const fs = require('fs');
@@ -154,13 +148,6 @@ jobs:
               body: body
             });
 
-      - name: Fail if regression detected
-        if: steps.regression.outcome == 'failure'
-        run: |
-          echo "⚠️ Performance regression detected!"
-          echo "Review the regression report for details."
-          exit 1
-
       - name: Update benchmark baseline (main branch only)
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         run: |
@@ -171,21 +158,22 @@ jobs:
   performance-tracking:
     name: Track Performance Trends
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     needs: benchmark
     if: github.ref == 'refs/heads/main'
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Download benchmark results
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: benchmark-results-${{ github.sha }}
           path: benchmarks/data
 
       - name: Store performance metrics
-        uses: benchmark-action/github-action-benchmark@v1
+        uses: benchmark-action/github-action-benchmark@52576c92bccf6ac60c8223ec7eb2565637cae9ba # v1.22.1
         with:
           tool: 'customBiggerIsBetter'
           output-file-path: benchmarks/data/results-v2.0.json

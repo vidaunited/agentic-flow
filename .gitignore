@@ -144,3 +144,9 @@ agentdb.db-shm
 
 # Claude Code session-only state
 .claude/scheduled_tasks.lock
+
+# Native addons are built per platform and published as platform packages
+# (see packages/agentic-jujutsu/index.js). The one binary below is loaded
+# from this path by that loader on linux-x64 and stays tracked on purpose.
+*.node
+!packages/agentic-jujutsu/agentic-jujutsu.linux-x64-gnu.node

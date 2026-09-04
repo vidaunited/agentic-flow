@@ -15,14 +15,14 @@ COPY agentic-flow/agentic-flow-1.1.3.tgz .
 # Install from tarball
 RUN npm install -g ./agentic-flow-1.1.3.tgz
 
-# Set environment variables (use build args)
-ARG ANTHROPIC_API_KEY
-ARG OPENROUTER_API_KEY
-ARG GOOGLE_GEMINI_API_KEY
-
-ENV ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
-ENV OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
-ENV GOOGLE_GEMINI_API_KEY=${GOOGLE_GEMINI_API_KEY}
+# Provider API keys are only needed when the test commands below run, so
+# they are supplied at container start and never written into an image
+# layer (an ENV baked from a build ARG is recoverable from the image
+# history by anyone who can pull it):
+#
+#   docker run --rm \
+#     -e ANTHROPIC_API_KEY -e OPENROUTER_API_KEY -e GOOGLE_GEMINI_API_KEY \
+#     agentic-flow-test-release
 
 # Test commands
 CMD echo "Testing agentic-flow installation..." && \
