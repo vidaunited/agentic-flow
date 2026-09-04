@@ -6,20 +6,20 @@
 module.exports = {
   // TypeScript files
   '**/*.ts': [
-    'prettier --config config/.prettierrc.js --write',
+    'prettier --config config/.prettierrc.cjs --write',
   ],
 
   // JavaScript files
   '**/*.js': [
-    'prettier --config config/.prettierrc.js --write'
+    'prettier --config config/.prettierrc.cjs --write'
   ],
 
   // JSON files
-  '**/*.json': ['prettier --config config/.prettierrc.js --write'],
+  '**/*.json': ['prettier --config config/.prettierrc.cjs --write'],
 
   // YAML files
-  '**/*.{yml,yaml}': ['prettier --config config/.prettierrc.js --write'],
+  '**/*.{yml,yaml}': ['prettier --config config/.prettierrc.cjs --write'],
 
   // Markdown files
-  '**/*.md': ['prettier --config config/.prettierrc.js --write'],
+  '**/*.md': ['prettier --config config/.prettierrc.cjs --write'],
 };

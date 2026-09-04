@@ -55,8 +55,8 @@ check_dependency() {
 
 echo "1. Configuration Files"
 echo "----------------------"
-check_file "config/.eslintrc.strict.js"
-check_file "config/.prettierrc.js"
+check_file "config/.eslintrc.strict.cjs"
+check_file "config/.prettierrc.cjs"
 check_file "config/.prettierignore"
 check_file "config/.editorconfig"
 check_file "config/jest.config.cjs"
