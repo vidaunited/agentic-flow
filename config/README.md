@@ -29,7 +29,7 @@ This directory contains all code quality and development tooling configurations 
 
 ### Testing
 
-- **`jest.config.js`** - Jest test configuration
+- **`jest.config.cjs`** - Jest test configuration
   - Coverage thresholds (80% minimum)
   - TypeScript support via ts-jest
   - Coverage reporting
