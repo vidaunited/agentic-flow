@@ -234,3 +234,5 @@ MIT License - see [LICENSE](../../LICENSE)
 **Status**: Production Ready ✅
 **Tests**: 55 passing (95%+ coverage)
 **Lines**: 1,476 source + 1,823 tests
+
+<!-- probe: confirming agentdb checks now report SKIPPED rather than vanish on unrelated PRs -->
