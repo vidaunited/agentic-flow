@@ -8,6 +8,18 @@ on:
     - cron: '0 2 * * *'
   workflow_dispatch:
 
+# Two merges in quick succession left two 20-minute benchmark runs racing each
+# other on the same ref, and nothing cancelled either. Matches the group shape
+# already used by test.yml.
+#
+# cancel-in-progress is right for this workflow specifically: every run measures
+# whatever main currently is, so a superseded run's numbers are not worth the
+# runner time. The cost is that cancelling can drop a data point mid-flight,
+# including one that performance-tracking was about to store.
+concurrency:
+  group: agentic-flow-benchmarks-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   benchmark:
     name: Run Performance Benchmarks
