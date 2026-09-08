@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1788868767603,
+  "lastUpdate": 1788875153369,
   "repoUrl": "https://github.com/vidaunited/agentic-flow",
   "entries": {
     "Benchmark": [
@@ -107,6 +107,60 @@ window.BENCHMARK_DATA = {
           {
             "name": "task-orchestration",
             "value": 55666.161,
+            "unit": "ops/sec"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "mohammed@vimarkets.com",
+            "name": "vidaunited",
+            "username": "vidaunited"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "7d331ed61142ad03ba612d8f8c5207f923882b0a",
+          "message": "Merge pull request #8 from vidaunited/fix/benchmark-alert-noise-floor\n\nfix(ci): stop the benchmark alert firing on runner noise",
+          "timestamp": "2026-09-08T14:16:36+01:00",
+          "tree_id": "f42198b9ef064760ab6b01e2fc5faae3eaa52ee7",
+          "url": "https://github.com/vidaunited/agentic-flow/commit/7d331ed61142ad03ba612d8f8c5207f923882b0a"
+        },
+        "date": 1788875152402,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "vector-search-1000",
+            "value": 112707.805,
+            "unit": "ops/sec"
+          },
+          {
+            "name": "vector-search-10000",
+            "value": 159683.24,
+            "unit": "ops/sec"
+          },
+          {
+            "name": "vector-search-100000",
+            "value": 120256.078,
+            "unit": "ops/sec"
+          },
+          {
+            "name": "agent-spawn",
+            "value": 718310.356,
+            "unit": "ops/sec"
+          },
+          {
+            "name": "memory-insert",
+            "value": 367163.011,
+            "unit": "ops/sec"
+          },
+          {
+            "name": "task-orchestration",
+            "value": 92316.251,
             "unit": "ops/sec"
           }
         ]
