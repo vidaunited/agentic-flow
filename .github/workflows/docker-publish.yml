@@ -114,7 +114,14 @@ jobs:
         with:
           context: ${{ matrix.context }}
           file: ${{ matrix.dockerfile }}
-          platforms: ${{ matrix.platforms }}
+          # Multi-arch only when the images are actually going somewhere.
+          # arm64 is emulated through QEMU on an amd64 runner — roughly an
+          # order of magnitude slower for anything that compiles native
+          # modules, and this repo has several. A build-only run (no Docker Hub
+          # credentials) exists to prove the Dockerfiles still build, and
+          # linux/amd64 establishes that; the arm64 layers are then thrown
+          # away. Publishing restores the full matrix automatically.
+          platforms: ${{ steps.creds.outputs.available == 'true' && matrix.platforms || 'linux/amd64' }}
           push: ${{ github.event_name != 'pull_request' && steps.creds.outputs.available == 'true' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
