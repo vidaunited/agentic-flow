@@ -9,6 +9,10 @@ on:
       # merge that changes only this workflow matched nothing and the workflow
       # did not run on main at all.
       - '.github/workflows/agentdb-docker-test.yml'
+      # This workflow is the only place the agentdb image is exercised, and the
+      # Dockerfile lives outside packages/agentdb, so without this line a change
+      # to it matched nothing here and went straight to docker-publish.yml.
+      - 'docker/Dockerfile.agentdb'
   pull_request:
     branches: [ main, develop ]
     # Deliberately NO paths filter. Measured 2026-09-08: a check that reports
@@ -41,7 +45,7 @@ jobs:
           fi
           files=$(gh api "repos/${{ github.repository }}/pulls/${{ github.event.number }}/files" \
                     --paginate --jq '.[].filename')
-          if printf '%s\n' "$files" | grep -qE '^(packages/agentdb/|\.github/workflows/agentdb-docker-test\.yml$)'; then
+          if printf '%s\n' "$files" | grep -qE '^(packages/agentdb/|docker/Dockerfile\.agentdb$|\.github/workflows/agentdb-docker-test\.yml$)'; then
             echo "run=true" >> "$GITHUB_OUTPUT"
           else
             echo "run=false" >> "$GITHUB_OUTPUT"
@@ -57,6 +61,11 @@ jobs:
     if: needs.changes.outputs.run == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30  # back to its original: the vitest suite it used to build is no longer in this job
+    # Left at 30 with the image build+run added below. That step's npm ci + tsc
+    # is the same work npm-publish-test already does inside its own 15m budget,
+    # so the addition is small; and this file's timeouts are what they are
+    # because tightening one from a single sample went wrong twice. Raise this
+    # on a measured overrun, not on a guess.
 
     steps:
       - name: Checkout repository
@@ -99,6 +108,37 @@ jobs:
 
           docker buildx build -f docker/Dockerfile.root --target production -t agentdb-production --load \
             --cache-from type=gha .
+
+      # The image this repository publishes as <owner>/agentic-flow-agentdb
+      # could not start: its CMD was `node src/index.js` while the package ships
+      # only src/index.ts, so every container exited 1 with MODULE_NOT_FOUND.
+      # Nothing caught it because every Docker job here only ever BUILT images
+      # and none had ever RUN one - a build succeeds perfectly happily with a
+      # CMD naming a file that does not exist. So run it, and let the exit code
+      # be the verdict.
+      #
+      # No `working-directory` on this step, on purpose - unlike every other
+      # build step in this workflow, which sets it to packages/agentdb.
+      # Dockerfile.agentdb's COPY paths are `packages/agentdb/...`: they are
+      # relative to the repository root, which is the only context this image
+      # can be built from, and the context docker-publish.yml builds it in.
+      - name: Build and run the published agentdb image
+        run: |
+          set -euo pipefail
+
+          # Its own gha cache scope so this build and the Dockerfile.root builds
+          # above do not overwrite each other's entries.
+          docker buildx build -f docker/Dockerfile.agentdb \
+            --target production -t agentic-flow-agentdb:ci --load \
+            --cache-from type=gha,scope=agentdb-image \
+            --cache-to type=gha,mode=max,scope=agentdb-image .
+
+          # Deliberately bare: no `|| true`, no `|| echo`, no
+          # continue-on-error. A non-zero exit is the entire point of the step -
+          # masking it here would restore exactly the blind spot that let a
+          # non-starting image reach Docker Hub.
+          docker run --rm agentic-flow-agentdb:ci
+          echo "agentdb image started its entrypoint and exited 0"
 
   # =============================================================================
   # Job 2: Docker Compose Test
