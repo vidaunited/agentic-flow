@@ -11,6 +11,13 @@
 import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import { createRequire } from 'module';
+
+// This file is ESM. A bare `require.resolve` has no binding here, and under
+// Vite's SSR transform its presence silently truncates the export namespace of
+// every module that imports this one — src/reasoningbank/index.ts lost 9 of its
+// 30 exports, with no error raised. createRequire gives a real resolver.
+const requireFromHere = createRequire(import.meta.url);
 
 let patched = false;
 let patchAttempted = false;
@@ -143,7 +150,7 @@ function findAgentDBPath(): string | null {
 
   // Try require.resolve as fallback
   try {
-    const resolved = require.resolve('agentdb/package.json');
+    const resolved = requireFromHere.resolve('agentdb/package.json');
     return dirname(resolved);
   } catch {
     // Not found via require.resolve

@@ -38,7 +38,19 @@ export interface RetrievalOptions {
   minReward?: number;
   onlySuccesses?: boolean;
   onlyFailures?: boolean;
+  /**
+   * Relevance floor for vector search, as cosine similarity. A k-NN query
+   * always returns k neighbours however unrelated they are, so without a floor
+   * an unknown task comes back with a full set of irrelevant "evidence" and
+   * downstream confidence scoring treats it as real. Measured separation on
+   * the MiniLM embedder is wide — related queries score 0.70-0.94, unrelated
+   * ones peak at 0.09 — so the default sits in the empty band between them.
+   */
+  minSimilarity?: number;
 }
+
+/** Default relevance floor for retrieval. See RetrievalOptions.minSimilarity. */
+export const DEFAULT_MIN_SIMILARITY = 0.3;
 
 export interface CausalInsight {
   action: string;
@@ -51,15 +63,47 @@ export interface CausalInsight {
 
 export class HybridReasoningBank {
   private memory: SharedMemoryPool;
-  private reflexion: ReflexionMemory;
-  private skills: SkillLibrary;
-  private causalRecall: CausalRecall;
-  private causalGraph: CausalMemoryGraph;
+  private reflexion!: ReflexionMemory;
+  private skills!: SkillLibrary;
+  private causalRecall!: CausalRecall;
+  private causalGraph!: CausalMemoryGraph;
   private useWasm: boolean;
   private wasmModule: any;
+  private readyPromise: Promise<void> | null = null;
 
   constructor(options: { preferWasm?: boolean } = {}) {
+    // The pool initialises asynchronously (dynamic better-sqlite3 import plus
+    // embedder warm-up), so the constructor must NOT touch the database.
+    // Controllers are wired on first use by `ready()`.
     this.memory = SharedMemoryPool.getInstance();
+
+    this.useWasm = options.preferWasm ?? true;
+    this.wasmModule = null;
+
+    // Try to load WASM module
+    if (this.useWasm) {
+      this.loadWasmModule().catch(err => {
+        console.warn('[HybridReasoningBank] WASM unavailable, using TypeScript:', err.message);
+        this.useWasm = false;
+      });
+    }
+  }
+
+  /**
+   * Idempotently initialise the shared pool and wire the controllers that
+   * depend on its database handle. Every async entry point awaits this, so
+   * callers can construct the bank and use it without a separate init step.
+   */
+  private async ready(): Promise<void> {
+    if (!this.readyPromise) {
+      this.readyPromise = this.wire();
+    }
+    return this.readyPromise;
+  }
+
+  private async wire(): Promise<void> {
+    await this.memory.ensureInitialized();
+
     const db = this.memory.getDatabase();
     const embedder = this.memory.getEmbedder() as any;
 
@@ -74,17 +118,14 @@ export class HybridReasoningBank {
       gamma: 0.1,  // 10% penalty for latency
       minConfidence: 0.7
     } as any);
+  }
 
-    this.useWasm = options.preferWasm ?? true;
-    this.wasmModule = null;
-
-    // Try to load WASM module
-    if (this.useWasm) {
-      this.loadWasmModule().catch(err => {
-        console.warn('[HybridReasoningBank] WASM unavailable, using TypeScript:', err.message);
-        this.useWasm = false;
-      });
-    }
+  /**
+   * Public initialisation hook. Optional — every async method self-initialises
+   * — but useful when a caller wants initialisation errors surfaced eagerly.
+   */
+  async initialize(): Promise<void> {
+    return this.ready();
   }
 
   private async loadWasmModule(): Promise<void> {
@@ -102,6 +143,7 @@ export class HybridReasoningBank {
    * Store a reasoning pattern
    */
   async storePattern(pattern: PatternData): Promise<number> {
+    await this.ready();
     const episodeId = await this.reflexion.storeEpisode(pattern);
 
     // Store causal edge if action led to outcome
@@ -133,10 +175,17 @@ export class HybridReasoningBank {
    * Retrieve similar patterns with optional WASM acceleration
    */
   async retrievePatterns(query: string, options: RetrievalOptions = {}): Promise<any[]> {
-    const { k = 5, minReward, onlySuccesses, onlyFailures } = options;
+    await this.ready();
+    const {
+      k = 5,
+      minReward,
+      onlySuccesses,
+      onlyFailures,
+      minSimilarity = DEFAULT_MIN_SIMILARITY,
+    } = options;
 
     // Check cache first
-    const cacheKey = `retrieve:${query}:${k}:${onlySuccesses}:${onlyFailures}`;
+    const cacheKey = `retrieve:${query}:${k}:${onlySuccesses}:${onlyFailures}:${minSimilarity}`;
     const cached = this.memory.getCachedQuery(cacheKey);
     if (cached) return cached;
 
@@ -161,6 +210,12 @@ export class HybridReasoningBank {
       }));
 
       // Apply filters
+      if (minSimilarity > 0) {
+        patterns = patterns.filter(
+          p => typeof p.similarity !== 'number' || p.similarity >= minSimilarity
+        );
+      }
+
       if (minReward !== undefined) {
         patterns = patterns.filter(p => (p.uplift || 0) >= minReward);
       }
@@ -180,8 +235,18 @@ export class HybridReasoningBank {
         onlyFailures
       });
 
-      this.memory.cacheQuery(cacheKey, results, 60000);
-      return results;
+      // Same relevance floor as the primary path — otherwise the fallback
+      // silently reports unrelated neighbours as evidence.
+      const filtered =
+        minSimilarity > 0
+          ? results.filter(
+              (r: any) =>
+                typeof r?.similarity !== 'number' || r.similarity >= minSimilarity
+            )
+          : results;
+
+      this.memory.cacheQuery(cacheKey, filtered, 60000);
+      return filtered;
     }
   }
 
@@ -196,6 +261,7 @@ export class HybridReasoningBank {
     confidence: number;
     recommendation: string;
   }> {
+    await this.ready();
     // Get successful patterns
     const patterns = await this.retrievePatterns(task, { k: 10, onlySuccesses: true });
 
@@ -260,6 +326,7 @@ export class HybridReasoningBank {
    * Auto-consolidate patterns into skills
    */
   async autoConsolidate(minUses: number = 3, minSuccessRate: number = 0.7, lookbackDays: number = 30): Promise<{ skillsCreated: number }> {
+    await this.ready();
     // Get task statistics
     const stats = await this.reflexion.getTaskStats('', lookbackDays);
 
@@ -310,6 +377,7 @@ export class HybridReasoningBank {
    * What-if causal analysis
    */
   async whatIfAnalysis(action: string): Promise<CausalInsight> {
+    await this.ready();
     try {
       // Use task statistics for what-if analysis
       const stats = await this.reflexion.getTaskStats(action, 30);
@@ -353,6 +421,7 @@ export class HybridReasoningBank {
    * Search for relevant skills
    */
   async searchSkills(taskType: string, k: number = 5): Promise<any[]> {
+    await this.ready();
     return this.skills.searchSkills({ task: taskType, k, minSuccessRate: 0.5 });
   }
 
@@ -365,7 +434,9 @@ export class HybridReasoningBank {
     skills: number;
   } {
     return {
-      causalRecall: this.causalRecall.getStats(),
+      // Synchronous accessor: the bank may not have been wired yet (wiring is
+      // async). Report empty stats rather than throwing on an un-awaited bank.
+      causalRecall: this.causalRecall ? this.causalRecall.getStats() : {},
       reflexion: {}, // ReflexionMemory doesn't expose global stats
       skills: 0 // Would need to query database
     };

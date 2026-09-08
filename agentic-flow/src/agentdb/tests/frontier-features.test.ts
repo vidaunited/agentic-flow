@@ -491,7 +491,11 @@ describe('Frontier Features - ExplainableRecall', () => {
 
     expect(verification.valid).toBe(false);
     expect(verification.issues.length).toBeGreaterThan(0);
-    expect(verification.issues[0]).toContain('Merkle root');
+    // This test rewrites chunk_ids only, leaving source_hashes — and therefore
+    // the Merkle root — intact. The check that catches it is the per-chunk hash
+    // comparison, so assert on that rather than on a Merkle mismatch that this
+    // particular tamper does not produce.
+    expect(verification.issues.join(' ')).toContain('999');
   });
 
   test('should provide justification for each chunk', () => {
@@ -563,24 +567,24 @@ describe('Frontier Features - ExplainableRecall', () => {
 
     const audit = explainableRecall.auditCertificate(certificate.id);
 
-    // Validate audit structure
-    expect(audit).toHaveProperty('certificateId');
-    expect(audit).toHaveProperty('queryText');
-    expect(audit).toHaveProperty('totalChunks');
-    expect(audit).toHaveProperty('minimalSetSize');
-    expect(audit).toHaveProperty('redundancyRatio');
-    expect(audit).toHaveProperty('completenessScore');
-    expect(audit).toHaveProperty('avgNecessityScore');
-    expect(audit).toHaveProperty('provenanceVerified');
-    expect(audit).toHaveProperty('qualityScore');
+    // auditCertificate returns a nested report — the certificate itself, its
+    // justification paths, provenance by chunk, and a quality block. (The flat
+    // shape this test used to assert, with certificateId/qualityScore/
+    // provenanceVerified, was never implemented.)
+    expect(audit).toHaveProperty('certificate');
+    expect(audit).toHaveProperty('justifications');
+    expect(audit).toHaveProperty('provenance');
+    expect(audit).toHaveProperty('quality');
 
-    expect(audit.certificateId).toBe(certificate.id);
-    expect(audit.totalChunks).toBe(4);
-    expect(audit.minimalSetSize).toBeGreaterThan(0);
-    expect(audit.redundancyRatio).toBeGreaterThanOrEqual(1);
-    expect(audit.qualityScore).toBeGreaterThanOrEqual(0);
-    expect(audit.qualityScore).toBeLessThanOrEqual(1);
-    expect(audit.provenanceVerified).toBe(true);
+    expect(audit.certificate.id).toBe(certificate.id);
+    expect(audit.certificate.queryText).toBe('Test audit query');
+    expect(audit.certificate.chunkIds).toHaveLength(4);
+    expect(audit.certificate.minimalWhy.length).toBeGreaterThan(0);
+
+    expect(audit.quality.redundancy).toBeGreaterThanOrEqual(1);
+    expect(audit.quality.completeness).toBeGreaterThanOrEqual(0);
+    expect(audit.quality.completeness).toBeLessThanOrEqual(1);
+    expect(audit.quality.avgNecessity).toBeGreaterThanOrEqual(0);
   });
 
   test('should handle empty chunks gracefully', () => {
@@ -723,12 +727,27 @@ describe('Frontier Features - Integration Tests', () => {
     expect(certificate).toBeDefined();
     expect(certificate.minimalWhy.length).toBeGreaterThan(0);
 
-    // 5. Audit the certificate
+    // 5. Audit the certificate. `provenanceVerified` was never part of the
+    // audit report (see the audit-structure test above); assert the provenance
+    // the report does carry, and verify the certificate through the API that
+    // actually performs verification.
     const audit = explainableRecall.auditCertificate(certificate.id);
-    expect(audit.provenanceVerified).toBe(true);
+    expect(audit.certificate.id).toBe(certificate.id);
+    expect(audit.provenance).toBeDefined();
+    expect(explainableRecall.verifyCertificate(certificate.id).valid).toBe(true);
   });
 
   test('should handle large-scale causal experiments efficiently', () => {
+    // beforeEach gives each test a fresh empty database, and the observations
+    // below reference episodes 1-10 through a FOREIGN KEY. Seed them, as the
+    // sibling integration test does, or every recordObservation() fails.
+    for (let i = 1; i <= 10; i++) {
+      db.prepare(`
+        INSERT INTO episodes (session_id, task, reward, success)
+        VALUES (?, ?, ?, ?)
+      `).run(`scale-session${i}`, `scale-task${i}`, 0.7, 1);
+    }
+
     // Create experiment with many observations
     const expId = causalGraph.createExperiment({
       name: 'Large Scale Test',

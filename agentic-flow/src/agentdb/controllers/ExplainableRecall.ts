@@ -86,13 +86,20 @@ export class ExplainableRecall {
   }): RecallCertificate {
     const { queryId, queryText, chunks, requirements, accessLevel = 'internal' } = params;
 
-    const startTime = Date.now();
+    // performance.now(), not Date.now(): certificate creation routinely
+    // completes inside a single millisecond tick, which reported a latency of
+    // exactly 0 — indistinguishable from 'never measured', and intermittently
+    // failing any assertion that latency was recorded.
+    const startTime = performance.now();
 
     // 1. Compute minimal hitting set
     const minimalWhy = this.computeMinimalHittingSet(chunks, requirements);
 
     // 2. Calculate metrics
-    const redundancyRatio = chunks.length / minimalWhy.length;
+    // Guard the empty case: 0 chunks over a 0-length minimal set is 0/0 = NaN,
+    // which then persists into the certificate and every audit that reads it.
+    const redundancyRatio =
+      minimalWhy.length === 0 ? 0 : chunks.length / minimalWhy.length;
     const completenessScore = this.calculateCompleteness(minimalWhy, requirements);
 
     // 3. Build provenance chain
@@ -136,7 +143,7 @@ export class ExplainableRecall {
       JSON.stringify(sourceHashes),
       JSON.stringify(proofChain),
       accessLevel,
-      Date.now() - startTime
+      performance.now() - startTime
     );
 
     // 7. Store justification paths
@@ -155,7 +162,7 @@ export class ExplainableRecall {
       sourceHashes,
       proofChain,
       accessLevel: accessLevel as any,
-      latencyMs: Date.now() - startTime
+      latencyMs: performance.now() - startTime
     };
 
     return certificate;
@@ -354,6 +361,8 @@ export class ExplainableRecall {
       return chunks.slice(0, Math.min(3, chunks.length)).map(c => c.id);
     }
 
+    // The loop below reassigns `chunks`; keep the original for the fallback.
+    const originalChunks = chunks;
     const uncovered = new Set(requirements);
     const selected: string[] = [];
 
@@ -386,6 +395,17 @@ export class ExplainableRecall {
 
       // Remove selected chunk
       chunks = chunks.filter(c => c.id !== bestChunk.id);
+    }
+
+    // A requirement is "covered" only when a chunk's text literally contains it,
+    // so a perfectly good chunk set can cover nothing and leave `selected`
+    // empty. That produced certificates whose justification set was empty —
+    // which verifyCertificate() itself then reports as invalid ('Empty
+    // justification set'), i.e. the issuer emitted certificates its own
+    // verifier rejects. Fall back to the same top-N-chunks justification used
+    // when no requirements were supplied at all.
+    if (selected.length === 0) {
+      return originalChunks.slice(0, Math.min(3, originalChunks.length)).map(c => c.id);
     }
 
     return selected;
@@ -424,15 +444,53 @@ export class ExplainableRecall {
       return existing.content_hash;
     }
 
-    // Create new provenance
+    // Create new provenance.
     const contentHash = this.getContentHash(sourceType, sourceId);
 
+    // ON CONFLICT DO NOTHING rather than a bare INSERT: content_hash is UNIQUE,
+    // and two callers racing the SELECT above both reach here. It also collides
+    // legitimately — getContentHash() returns sha256('') for any source row that
+    // does not exist, so every such source shares one hash.
     this.db.prepare(`
       INSERT INTO provenance_sources (source_type, source_id, content_hash, creator)
       VALUES (?, ?, ?, ?)
+      ON CONFLICT(content_hash) DO NOTHING
     `).run(sourceType, sourceId, contentHash, 'system');
 
     return contentHash;
+  }
+
+  /**
+   * Create a provenance source row and return its numeric id.
+   *
+   * The internal getOrCreateProvenance() returns a content hash and always
+   * attributes the row to 'system'; this is the public entry point for
+   * recording a source with a known creator.
+   */
+  createProvenance(params: {
+    sourceType: string;
+    sourceId: number;
+    creator?: string;
+    parentHash?: string;
+  }): number {
+    const { sourceType, sourceId, creator = 'system', parentHash = null } = params;
+    const contentHash = this.getContentHash(sourceType, sourceId);
+
+    this.db.prepare(`
+      INSERT INTO provenance_sources (source_type, source_id, content_hash, parent_hash, creator)
+      VALUES (?, ?, ?, ?, ?)
+      ON CONFLICT(content_hash) DO UPDATE SET
+        source_type = excluded.source_type,
+        source_id   = excluded.source_id,
+        parent_hash = excluded.parent_hash,
+        creator     = excluded.creator
+    `).run(sourceType, sourceId, contentHash, parentHash, creator);
+
+    const row = this.db.prepare(
+      'SELECT id FROM provenance_sources WHERE content_hash = ?'
+    ).get(contentHash) as { id: number };
+
+    return row.id;
   }
 
   /**

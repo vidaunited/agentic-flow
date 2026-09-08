@@ -33,7 +33,13 @@ jobs:
       - name: Install dependencies
         run: |
           npm ci
-          cd benchmarks && npm install
+          # `npm run build` below is `cd agentic-flow && npm run build`, so the
+          # inner workspace needs its OWN dependencies. Installing only the root
+          # ones left @huggingface/transformers and @metaharness/router absent
+          # and resolved ruvector to the root's older ^0.2.18 instead of the
+          # pinned 0.2.40 — 18 type errors, and the build never once succeeded.
+          cd agentic-flow && npm ci --ignore-scripts && npm rebuild better-sqlite3
+          cd ../benchmarks && npm install
 
       - name: Build packages
         run: npm run build
@@ -79,6 +85,18 @@ jobs:
           cd benchmarks
           npm run benchmark:report
 
+      - name: Export results for trend tracking
+        run: |
+          cd benchmarks
+          npm run benchmark:export
+
+      - name: Snapshot benchmark baseline (main branch only)
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: |
+          cd benchmarks
+          cp data/results-v2.0.json data/baseline-v2.0.json
+          echo "Baseline snapshot written to benchmarks/data/baseline-v2.0.json"
+
       - name: Upload Benchmark Results
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -86,6 +104,8 @@ jobs:
           name: benchmark-results-${{ github.sha }}
           path: |
             benchmarks/data/results-v2.0.json
+            benchmarks/data/benchmark-action.json
+            benchmarks/data/baseline-v2.0.json
             benchmarks/data/regression-report.json
             benchmarks/reports/benchmark-report.html
           retention-days: 90
@@ -112,7 +132,17 @@ jobs:
               return;
             }
 
-            const report = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
+            // saveBenchmarkResults() wraps the payload as { ...metadata,
+            // results: [report] }, so the comparisons live one level down.
+            // Reading report.comparisons directly yielded undefined and threw
+            // on the for..of below.
+            const raw = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
+            const report = Array.isArray(raw.results) ? raw.results[0] : raw;
+
+            if (!report || !Array.isArray(report.comparisons)) {
+              console.log('Regression report has no comparisons; skipping comment');
+              return;
+            }
 
             // Create comment body
             let body = '## 📊 Performance Benchmark Results\n\n';
@@ -148,19 +178,17 @@ jobs:
               body: body
             });
 
-      - name: Update benchmark baseline (main branch only)
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-        run: |
-          cd benchmarks
-          cp data/results-v2.0.json data/baseline-v2.0.json
-          echo "✅ Baseline updated"
-
   performance-tracking:
     name: Track Performance Trends
     runs-on: ubuntu-latest
     timeout-minutes: 30
     needs: benchmark
     if: github.ref == 'refs/heads/main'
+
+    # auto-push below commits the trend history; without this the job has only
+    # the default read token and cannot write.
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout code
@@ -172,11 +200,28 @@ jobs:
           name: benchmark-results-${{ github.sha }}
           path: benchmarks/data
 
+      # github-action-benchmark stores its history on gh-pages and fails if the
+      # branch is absent. The repository has no gh-pages branch today, so gate
+      # the step rather than failing the job; create the branch to enable it.
+      - name: Check for gh-pages branch
+        id: ghpages
+        run: |
+          if git ls-remote --exit-code --heads origin gh-pages >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::No gh-pages branch — skipping trend storage. Create it to enable performance tracking."
+          fi
+
       - name: Store performance metrics
+        if: steps.ghpages.outputs.exists == 'true'
         uses: benchmark-action/github-action-benchmark@52576c92bccf6ac60c8223ec7eb2565637cae9ba # v1.22.1
         with:
           tool: 'customBiggerIsBetter'
-          output-file-path: benchmarks/data/results-v2.0.json
+          # The action requires a flat [{name, unit, value}] array;
+          # results-v2.0.json is an object of BenchmarkResult records and was
+          # never parseable by it.
+          output-file-path: benchmarks/data/benchmark-action.json
           github-token: ${{ secrets.GITHUB_TOKEN }}
           auto-push: true
           comment-on-alert: true
