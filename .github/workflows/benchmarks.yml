@@ -244,5 +244,16 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           auto-push: true
           comment-on-alert: true
-          alert-threshold: '150%'
-          fail-on-alert: true
+          # 150% sits BELOW this workload's measured noise floor. Two
+          # consecutive runs whose only diff was .github/workflows/
+          # docker-publish.yml — a file that cannot affect benchmark
+          # performance — reported task-orchestration at 99,029 then 55,666
+          # ops/sec, a 1.78x swing on identical benchmark code. These are
+          # microbenchmarks on shared GitHub runners, so run-to-run variance
+          # of that size is expected.
+          alert-threshold: '200%'
+          # Alert and comment, but do not fail the build. A gate that cannot
+          # distinguish a regression from runner variance produces recurring
+          # false reds, and a red that means nothing is one people learn to
+          # ignore — including on the run where it is real.
+          fail-on-alert: false
