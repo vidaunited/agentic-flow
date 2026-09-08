@@ -5,6 +5,10 @@ on:
     branches: [ main, develop, 'release/**' ]
     paths:
       - 'packages/agentdb/**'
+      # The pull_request trigger gained this in #12; push never had it, so a
+      # merge that changes only this workflow matched nothing and the workflow
+      # did not run on main at all.
+      - '.github/workflows/agentdb-docker-test.yml'
   pull_request:
     branches: [ main, develop ]
     paths:
@@ -126,7 +130,12 @@ jobs:
     name: Multi-Platform Build
     runs-on: ubuntu-latest
     timeout-minutes: 90  # QEMU-emulated linux/arm64; the same multi-arch agentdb build in docker-publish.yml was killed at exactly 60m
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # Was push-to-main only, which made this the one job that could never be
+    # run on demand -- so it had no measured duration and its timeout was a
+    # guess. A dispatch can now exercise it deliberately.
+    if: >-
+      (github.event_name == 'push' && github.ref == 'refs/heads/main')
+      || github.event_name == 'workflow_dispatch'
 
     steps:
       - name: Checkout repository
