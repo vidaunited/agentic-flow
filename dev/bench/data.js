@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1788893420269,
+  "lastUpdate": 1788895218736,
   "repoUrl": "https://github.com/vidaunited/agentic-flow",
   "entries": {
     "Benchmark": [
@@ -431,6 +431,60 @@ window.BENCHMARK_DATA = {
           {
             "name": "task-orchestration",
             "value": 64261.471,
+            "unit": "ops/sec"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "mohammed@vimarkets.com",
+            "name": "vidaunited",
+            "username": "vidaunited"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "5af53989fee4c5435c5467e480107ca2de97fb9f",
+          "message": "Merge pull request #23 from vidaunited/claude/agentdb-docker-0l3yto\n\nfix(docker): the published agentdb image could not start\n\nVerified in CI: the image now builds through every stage and runs.\n\"agentdb image started its entrypoint and exited 0\"",
+          "timestamp": "2026-09-08T19:50:59+01:00",
+          "tree_id": "43b6e63a7a12465a005099d349a941c06443c262",
+          "url": "https://github.com/vidaunited/agentic-flow/commit/5af53989fee4c5435c5467e480107ca2de97fb9f"
+        },
+        "date": 1788895217464,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "vector-search-1000",
+            "value": 93837.794,
+            "unit": "ops/sec"
+          },
+          {
+            "name": "vector-search-10000",
+            "value": 148352.149,
+            "unit": "ops/sec"
+          },
+          {
+            "name": "vector-search-100000",
+            "value": 149432.872,
+            "unit": "ops/sec"
+          },
+          {
+            "name": "agent-spawn",
+            "value": 899624.407,
+            "unit": "ops/sec"
+          },
+          {
+            "name": "memory-insert",
+            "value": 422530.153,
+            "unit": "ops/sec"
+          },
+          {
+            "name": "task-orchestration",
+            "value": 92308.948,
             "unit": "ops/sec"
           }
         ]
