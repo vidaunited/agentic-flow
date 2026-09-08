@@ -19,11 +19,71 @@ WORKDIR /app
 
 # =============================================================================
 # Dependencies Stage
+#
+# Production-only tree, for the runtime image. Built on `base` rather than a
+# bare node image because the optional native accelerators compile here, and
+# they need python3/make/g++/sqlite-dev.
 # =============================================================================
 FROM base AS dependencies
 
 COPY packages/agentdb/package*.json ./
-RUN npm install --omit=dev
+# --include=optional is already npm's default; it is stated because it is
+# load-bearing here. The CLI this image starts statically imports chalk and
+# commander, and agentdb declares both under optionalDependencies, not
+# dependencies - so anything that turns optional deps off yields an image whose
+# entrypoint cannot resolve its first import.
+RUN npm install --omit=dev --include=optional
+
+# =============================================================================
+# Build Stage
+#
+# packages/agentdb ships TypeScript only: there is no src/index.js and no
+# committed dist/, so the image has to compile the package itself. That needs
+# the FULL dependency tree - typescript is a devDependency, which is why the
+# production-only install above cannot double as the build environment.
+# =============================================================================
+FROM base AS build
+
+COPY packages/agentdb ./
+
+# The build context is the repository ROOT, and the root .dockerignore's
+# `node_modules/` and `dist/` patterns are anchored there - they do not match
+# packages/agentdb/node_modules or packages/agentdb/dist, so a developer's local
+# ones travel into the context and land here. Discard them: host-built native
+# modules are for the wrong platform, and a stale dist/ would let a failed
+# compile below ship as a success.
+RUN rm -rf node_modules dist
+
+# Same install as every job in .github/workflows/agentdb-docker-test.yml:
+# --include=optional picks up the native accelerators when the lockfile has
+# them for this platform, and the bare retry covers the cases npm refuses with
+# that flag.
+RUN npm ci --include=optional || npm ci
+
+# `npm run build` cannot succeed with tsconfig.json as it ships. An unscoped
+# tsc reports 114 errors - 33 in benchmarks/, 42 in examples/, 39 in tests/ and
+# ZERO in src/ - and none of those three directories are in package.json's
+# `files`, so the build fails on code this image will never contain. Narrowing
+# `include` to the shipped source makes build:ts, copy:schemas and build:browser
+# all pass. This is the same technique, verbatim, as the "Scope typecheck to
+# shipped source" steps in .github/workflows/agentdb-docker-test.yml; keep the
+# two in step. The narrowing lives here rather than in the submodule because the
+# submodule is pinned and its fix belongs upstream (ruvnet/agentdb#25).
+RUN node -e "const fs = require('fs'); \
+    const cfg = JSON.parse(fs.readFileSync('tsconfig.json', 'utf8')); \
+    const before = cfg.include; \
+    cfg.include = ['src/**/*', 'simulation/**/*', 'simulation/scenarios/**/*']; \
+    fs.writeFileSync('tsconfig.json', JSON.stringify(cfg, null, 2)); \
+    console.log('tsconfig include was:', JSON.stringify(before)); \
+    console.log('tsconfig include now:', JSON.stringify(cfg.include));"
+
+RUN npm run build
+
+# tsconfig sets rootDir "." so src/ emits to dist/src/, and package.json's main
+# and bin agree. Assert it here so a layout change fails the build instead of
+# producing an image whose CMD points at a file that does not exist - which is
+# precisely how the previous `node src/index.js` reached Docker Hub.
+RUN test -f dist/src/index.js && test -f dist/src/cli/agentdb-cli.js
 
 # =============================================================================
 # Production Stage
@@ -38,20 +98,37 @@ RUN apk add --no-cache \
 
 WORKDIR /app
 
-# Copy dependencies and source
+# Ship what package.json's `files` declares - the compiled dist/ (dist/src/ and
+# dist/schemas/) plus the manifest - and not the TypeScript sources, which
+# nothing in this image can execute. package.json is required at runtime, not
+# just for metadata: its "type": "module" is what makes node load the emitted
+# .js as ESM. It is taken from the build stage so it is guaranteed to be the
+# manifest that dist/ was compiled from.
 COPY --from=dependencies /app/node_modules ./node_modules
-COPY packages/agentdb ./
+COPY --from=build /app/dist ./dist
+COPY --from=build /app/package.json ./package.json
 
 # Create data directories
 RUN mkdir -p /app/data /app/data/agentdb && \
     chmod -R 777 /app/data
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=20s --retries=3 \
-    CMD test -f /app/data/agentdb/health.check || exit 1
+# No HEALTHCHECK, deliberately. A healthcheck only runs while a container is
+# running, and this image runs no daemon - its default command prints the CLI
+# help and exits - so anything we could probe here would describe the image's
+# contents rather than the state of a running container. That is the same defect
+# as the check being removed (`test -f /app/data/agentdb/health.check`: nothing
+# in either repository ever creates that file, so it could never pass). The
+# assertion that actually matters - that the entrypoint loads - is worth making
+# once, at the right time, and now runs in CI: the docker-test job in
+# .github/workflows/agentdb-docker-test.yml builds this image, runs it, and
+# requires exit 0.
 
 ENTRYPOINT ["/usr/bin/dumb-init", "--"]
-CMD ["node", "src/index.js"]
+# Was `node src/index.js`. The package has only src/index.ts, so every container
+# started from the published image exited 1 with MODULE_NOT_FOUND. This is the
+# path package.json's own bin declares. --help is explicit rather than relying
+# on the argument-less CLI continuing to print help by default.
+CMD ["node", "dist/src/cli/agentdb-cli.js", "--help"]
 
 # Labels
 LABEL maintainer="ruv <contact@ruv.io>"
@@ -60,5 +137,6 @@ LABEL org.opencontainers.image.description="150x faster vector database with Rea
 LABEL org.opencontainers.image.version="2.0.0-alpha"
 LABEL org.opencontainers.image.source="https://github.com/ruvnet/agentic-flow"
 
-EXPOSE 5432
+# No EXPOSE. agentdb is an embedded/CLI vector database and this image starts no
+# server, so it binds no port. The 5432 that stood here is PostgreSQL's.
 VOLUME ["/app/data"]
