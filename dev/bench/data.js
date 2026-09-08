@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1788883981868,
+  "lastUpdate": 1788887916101,
   "repoUrl": "https://github.com/vidaunited/agentic-flow",
   "entries": {
     "Benchmark": [
@@ -269,6 +269,60 @@ window.BENCHMARK_DATA = {
           {
             "name": "task-orchestration",
             "value": 84095.342,
+            "unit": "ops/sec"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "mohammed@vimarkets.com",
+            "name": "vidaunited",
+            "username": "vidaunited"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "17156ebbe6e5d7831f9289c771d668f00bfb4046",
+          "message": "Merge pull request #16 from vidaunited/docs/link-upstream-cli-path-issue\n\ndocs(ci): link the excluded docker targets to ruvnet/agentdb#25",
+          "timestamp": "2026-09-08T17:48:57+01:00",
+          "tree_id": "15336dee8cf8d11f8d23c95a33689e1664139aa1",
+          "url": "https://github.com/vidaunited/agentic-flow/commit/17156ebbe6e5d7831f9289c771d668f00bfb4046"
+        },
+        "date": 1788887915255,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "vector-search-1000",
+            "value": 114480.488,
+            "unit": "ops/sec"
+          },
+          {
+            "name": "vector-search-10000",
+            "value": 72742.975,
+            "unit": "ops/sec"
+          },
+          {
+            "name": "vector-search-100000",
+            "value": 87062.435,
+            "unit": "ops/sec"
+          },
+          {
+            "name": "agent-spawn",
+            "value": 753976.434,
+            "unit": "ops/sec"
+          },
+          {
+            "name": "memory-insert",
+            "value": 366929.119,
+            "unit": "ops/sec"
+          },
+          {
+            "name": "task-orchestration",
+            "value": 83977.264,
             "unit": "ops/sec"
           }
         ]
