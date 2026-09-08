@@ -210,7 +210,14 @@ jobs:
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: benchmark-results-${{ github.sha }}
-          path: benchmarks/data
+          # `benchmarks`, not `benchmarks/data`: upload-artifact roots the
+          # archive at the least common ancestor of its paths, and that list
+          # spans benchmarks/data/* AND benchmarks/reports/*, so the LCA is
+          # `benchmarks` and the entries are `data/...` and `reports/...`.
+          # Extracting those under benchmarks/data produced
+          # benchmarks/data/data/benchmark-action.json, and the next step
+          # failed with ENOENT on benchmarks/data/benchmark-action.json.
+          path: benchmarks
 
       # github-action-benchmark stores its history on gh-pages and fails if the
       # branch is absent. The repository has no gh-pages branch today, so gate
