@@ -125,3 +125,5 @@ See [LICENSE](LICENSE) file for details.
 ---
 
 **Navigation**: [Index](INDEX.md) | [Architecture](architecture/README.md) | [Guides](guides/README.md) | [API](api/README.md)
+
+<!-- gate probe: verifying the required Quality Gate check actually blocks. This PR is not for merge. -->
