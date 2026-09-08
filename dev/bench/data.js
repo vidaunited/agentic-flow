@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1788887916101,
+  "lastUpdate": 1788891273287,
   "repoUrl": "https://github.com/vidaunited/agentic-flow",
   "entries": {
     "Benchmark": [
@@ -323,6 +323,60 @@ window.BENCHMARK_DATA = {
           {
             "name": "task-orchestration",
             "value": 83977.264,
+            "unit": "ops/sec"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "mohammed@vimarkets.com",
+            "name": "vidaunited",
+            "username": "vidaunited"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "201697fc5d675fb14089aa913c3c062ed1d65d39",
+          "message": "Merge pull request #21 from vidaunited/ci/tighten-multiplatform-timeout\n\nci: tighten the multi-platform timeout to its measured duration",
+          "timestamp": "2026-09-08T18:44:37+01:00",
+          "tree_id": "38dea4488be09a82902398138957f418ae210da6",
+          "url": "https://github.com/vidaunited/agentic-flow/commit/201697fc5d675fb14089aa913c3c062ed1d65d39"
+        },
+        "date": 1788891272301,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "vector-search-1000",
+            "value": 128620.341,
+            "unit": "ops/sec"
+          },
+          {
+            "name": "vector-search-10000",
+            "value": 126944.472,
+            "unit": "ops/sec"
+          },
+          {
+            "name": "vector-search-100000",
+            "value": 133530.959,
+            "unit": "ops/sec"
+          },
+          {
+            "name": "agent-spawn",
+            "value": 825205.472,
+            "unit": "ops/sec"
+          },
+          {
+            "name": "memory-insert",
+            "value": 403011.349,
+            "unit": "ops/sec"
+          },
+          {
+            "name": "task-orchestration",
+            "value": 83789.968,
             "unit": "ops/sec"
           }
         ]
