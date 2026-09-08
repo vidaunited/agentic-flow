@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1788875153369,
+  "lastUpdate": 1788879481640,
   "repoUrl": "https://github.com/vidaunited/agentic-flow",
   "entries": {
     "Benchmark": [
@@ -161,6 +161,60 @@ window.BENCHMARK_DATA = {
           {
             "name": "task-orchestration",
             "value": 92316.251,
+            "unit": "ops/sec"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "mohammed@vimarkets.com",
+            "name": "vidaunited",
+            "username": "vidaunited"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "3d6b99e19a6f77a93b2c72abf9d01a8af5d7576b",
+          "message": "Merge pull request #11 from vidaunited/fix/controller-filter-contracts\n\nfix(controllers): enforce query predicates instead of assuming the backend did",
+          "timestamp": "2026-09-08T15:27:17+01:00",
+          "tree_id": "0ef48e6d74871d4f90d5fcd9ca63b743b53ea552",
+          "url": "https://github.com/vidaunited/agentic-flow/commit/3d6b99e19a6f77a93b2c72abf9d01a8af5d7576b"
+        },
+        "date": 1788879480950,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "vector-search-1000",
+            "value": 101483.311,
+            "unit": "ops/sec"
+          },
+          {
+            "name": "vector-search-10000",
+            "value": 103345.565,
+            "unit": "ops/sec"
+          },
+          {
+            "name": "vector-search-100000",
+            "value": 175259.002,
+            "unit": "ops/sec"
+          },
+          {
+            "name": "agent-spawn",
+            "value": 682044.217,
+            "unit": "ops/sec"
+          },
+          {
+            "name": "memory-insert",
+            "value": 359915.583,
+            "unit": "ops/sec"
+          },
+          {
+            "name": "task-orchestration",
+            "value": 61244.462,
             "unit": "ops/sec"
           }
         ]
