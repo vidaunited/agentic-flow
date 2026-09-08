@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1788879481640,
+  "lastUpdate": 1788883981868,
   "repoUrl": "https://github.com/vidaunited/agentic-flow",
   "entries": {
     "Benchmark": [
@@ -215,6 +215,60 @@ window.BENCHMARK_DATA = {
           {
             "name": "task-orchestration",
             "value": 61244.462,
+            "unit": "ops/sec"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "mohammed@vimarkets.com",
+            "name": "vidaunited",
+            "username": "vidaunited"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "3ebd0764e152f2267c13b1645cc0b260e7f4588b",
+          "message": "Merge pull request #14 from vidaunited/fix/agentdb-docker-test-measurable\n\nfix(ci): make agentdb-docker-test measurable on demand",
+          "timestamp": "2026-09-08T16:42:34+01:00",
+          "tree_id": "c1cf2681c357c72648f82adf12474ba897abe71d",
+          "url": "https://github.com/vidaunited/agentic-flow/commit/3ebd0764e152f2267c13b1645cc0b260e7f4588b"
+        },
+        "date": 1788883981110,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "vector-search-1000",
+            "value": 115125.181,
+            "unit": "ops/sec"
+          },
+          {
+            "name": "vector-search-10000",
+            "value": 127373.656,
+            "unit": "ops/sec"
+          },
+          {
+            "name": "vector-search-100000",
+            "value": 149054.288,
+            "unit": "ops/sec"
+          },
+          {
+            "name": "agent-spawn",
+            "value": 907447.028,
+            "unit": "ops/sec"
+          },
+          {
+            "name": "memory-insert",
+            "value": 481685.475,
+            "unit": "ops/sec"
+          },
+          {
+            "name": "task-orchestration",
+            "value": 84095.342,
             "unit": "ops/sec"
           }
         ]
