@@ -274,3 +274,5 @@ jobs:
           path: ${{ env.WORKING_DIR }}/benchmarks/results/
           retention-days: 30
         if: always()
+
+# probe: does a SKIPPED check satisfy a required check?
