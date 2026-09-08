@@ -254,10 +254,17 @@ jobs:
         working-directory: ${{ env.WORKING_DIR }}
         run: npm run build
 
+      # Benchmarks are explicitly optional (see the job header), so a failure
+      # here must not fail the workflow. It was expressed as
+      #   npm run benchmark || echo "Benchmarks completed"
+      # which printed a message asserting the opposite of what had happened and
+      # left the step green, so a crashing benchmark was indistinguishable from
+      # a passing one. continue-on-error keeps the job tolerant while still
+      # surfacing the failure in the run.
       - name: Run benchmarks
+        continue-on-error: true
         working-directory: ${{ env.WORKING_DIR }}
-        run: |
-          npm run benchmark || echo "Benchmarks completed"
+        run: npm run benchmark
 
       - name: Upload benchmark results
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
