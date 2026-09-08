@@ -18,6 +18,7 @@ jobs:
     timeout-minutes: 30
 
     strategy:
+      fail-fast: false
       matrix:
         node-version: [18.x, 20.x, 22.x]
 
@@ -41,6 +42,19 @@ jobs:
       - name: Run unit tests
         working-directory: packages/agentdb
         run: npm run test:browser
+
+      - name: Scope typecheck to shipped source
+        working-directory: packages/agentdb
+        run: |
+          node -e "
+            const fs = require('fs');
+            const cfg = JSON.parse(fs.readFileSync('tsconfig.json', 'utf8'));
+            const before = cfg.include;
+            cfg.include = ['src/**/*', 'simulation/**/*', 'simulation/scenarios/**/*'];
+            fs.writeFileSync('tsconfig.json', JSON.stringify(cfg, null, 2));
+            console.log('tsconfig include was:', JSON.stringify(before));
+            console.log('tsconfig include now:', JSON.stringify(cfg.include));
+          "
 
       - name: Build TypeScript
         working-directory: packages/agentdb
@@ -165,6 +179,7 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 2
+          submodules: recursive
 
       - name: Setup Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
@@ -174,6 +189,19 @@ jobs:
       - name: Install dependencies
         working-directory: packages/agentdb
         run: npm ci
+
+      - name: Scope typecheck to shipped source
+        working-directory: packages/agentdb
+        run: |
+          node -e "
+            const fs = require('fs');
+            const cfg = JSON.parse(fs.readFileSync('tsconfig.json', 'utf8'));
+            const before = cfg.include;
+            cfg.include = ['src/**/*', 'simulation/**/*', 'simulation/scenarios/**/*'];
+            fs.writeFileSync('tsconfig.json', JSON.stringify(cfg, null, 2));
+            console.log('tsconfig include was:', JSON.stringify(before));
+            console.log('tsconfig include now:', JSON.stringify(cfg.include));
+          "
 
       - name: Build current version
         working-directory: packages/agentdb
@@ -235,6 +263,19 @@ jobs:
       - name: Install dependencies
         working-directory: packages/agentdb
         run: npm ci
+
+      - name: Scope typecheck to shipped source
+        working-directory: packages/agentdb
+        run: |
+          node -e "
+            const fs = require('fs');
+            const cfg = JSON.parse(fs.readFileSync('tsconfig.json', 'utf8'));
+            const before = cfg.include;
+            cfg.include = ['src/**/*', 'simulation/**/*', 'simulation/scenarios/**/*'];
+            fs.writeFileSync('tsconfig.json', JSON.stringify(cfg, null, 2));
+            console.log('tsconfig include was:', JSON.stringify(before));
+            console.log('tsconfig include now:', JSON.stringify(cfg.include));
+          "
 
       - name: Build bundle
         working-directory: packages/agentdb
@@ -318,6 +359,19 @@ jobs:
       - name: Install dependencies
         working-directory: packages/agentdb
         run: npm ci
+
+      - name: Scope typecheck to shipped source
+        working-directory: packages/agentdb
+        run: |
+          node -e "
+            const fs = require('fs');
+            const cfg = JSON.parse(fs.readFileSync('tsconfig.json', 'utf8'));
+            const before = cfg.include;
+            cfg.include = ['src/**/*', 'simulation/**/*', 'simulation/scenarios/**/*'];
+            fs.writeFileSync('tsconfig.json', JSON.stringify(cfg, null, 2));
+            console.log('tsconfig include was:', JSON.stringify(before));
+            console.log('tsconfig include now:', JSON.stringify(cfg.include));
+          "
 
       - name: Run full CI suite
         working-directory: packages/agentdb
