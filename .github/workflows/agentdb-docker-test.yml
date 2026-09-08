@@ -60,8 +60,15 @@ jobs:
           # typecheck. The stages fail with
           #   Error: Cannot find module '/app/dist/cli/agentdb-cli.js'
           # and cannot pass until the submodule's Dockerfile is corrected
-          # upstream. It went unnoticed because this workflow never once got
-          # past the `test` stage to reach them.
+          # upstream. Filed as ruvnet/agentdb#25 -- restore these two
+          # targets when it lands. It went unnoticed because this workflow
+          # never once got past the `test` stage to reach them.
+          #
+          # That issue also covers a bigger one we found while checking:
+          # Dockerfile.root:177 gives the PRODUCTION image
+          #   CMD ["node", "dist/cli/agentdb-cli.js", "--help"]
+          # so its default command cannot start either, and its healthcheck
+          # (`node -e "process.exit(0)"`) passes regardless.
 
           docker buildx build -f docker/Dockerfile.root --target production -t agentdb-production --load \
             --cache-from type=gha .
