@@ -11,7 +11,13 @@ on:
 
 env:
   REGISTRY: docker.io
-  IMAGE_NAME_PREFIX: ruvnet/agentic-flow
+  # Derived from the repository owner rather than hardcoded. This file named
+  # ruvnet/* in nine places, so a fork supplying DOCKERHUB_* secrets would have
+  # published into the upstream author's namespace, and its security scan and
+  # integration test would have pulled upstream's images rather than the ones
+  # the run just built. Resolves to the owner of whichever repo is running it.
+  IMAGE_NAMESPACE: ${{ github.repository_owner }}
+  IMAGE_NAME_PREFIX: ${{ github.repository_owner }}/agentic-flow
 
 jobs:
   # =============================================================================
@@ -19,7 +25,13 @@ jobs:
   # =============================================================================
   build-and-push:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    # 60 was not enough: with credentials present the matrix builds arm64 under
+    # QEMU, and the -agentdb leg was killed at exactly 60m00s still building.
+    # Build-only runs are single-arch and finish in minutes, so this ceiling
+    # only matters once publishing is enabled — which is the case that failed.
+    # The true multi-arch duration is unknown, because that run never finished;
+    # 120 is headroom over a lower bound, not a measured requirement.
+    timeout-minutes: 120
     strategy:
       # One failing leg cancelled the other three today, so a single broken
       # image hid the state of the rest. Report each independently.
@@ -100,7 +112,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
         with:
-          images: ${{ env.REGISTRY }}/ruvnet/${{ matrix.image }}
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/${{ matrix.image }}
           tags: |
             type=ref,event=branch
             type=ref,event=pr
@@ -139,7 +151,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     needs: build-and-push
-    # Scans docker.io/ruvnet/<image>:latest. With no push of our own that would
+    # Scans docker.io/<owner>/<image>:latest. With no push of our own that would
     # be reporting on images this run did not build, so gate it on publishing.
     if: github.event_name != 'pull_request' && needs.build-and-push.outputs.publish == 'true'
     strategy:
@@ -154,7 +166,7 @@ jobs:
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # 0.35.0
         with:
-          image-ref: ${{ env.REGISTRY }}/ruvnet/${{ matrix.image }}:latest
+          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/${{ matrix.image }}:latest
           format: 'sarif'
           output: 'trivy-results-${{ matrix.image }}.sarif'
 
@@ -190,10 +202,10 @@ jobs:
 
       - name: Pull Docker images
         run: |
-          docker pull ${{ env.REGISTRY }}/ruvnet/agentic-flow:latest
-          docker pull ${{ env.REGISTRY }}/ruvnet/agentic-flow-agentdb:latest
-          docker pull ${{ env.REGISTRY }}/ruvnet/agentic-flow-mcp:latest
-          docker pull ${{ env.REGISTRY }}/ruvnet/agentic-flow-swarm:latest
+          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/agentic-flow:latest
+          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/agentic-flow-agentdb:latest
+          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/agentic-flow-mcp:latest
+          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/agentic-flow-swarm:latest
 
       - name: Start services
         run: |
@@ -249,7 +261,7 @@ jobs:
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-          repository: ruvnet/agentic-flow
+          repository: ${{ env.IMAGE_NAME_PREFIX }}
           readme-filepath: ./docker/README.md
           short-description: "Production-ready AI agent orchestration platform with 66 specialized agents and 213 MCP tools"
 
