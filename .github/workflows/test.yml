@@ -27,12 +27,20 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          # packages/agentdb is a submodule; tests/issue-fixes.test.ts asserts
+          # on its source, and it is empty without this.
+          submodules: recursive
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "20.x"
           cache: npm
           cache-dependency-path: agentic-flow/package-lock.json
       - run: npm ci --ignore-scripts
+        # --ignore-scripts is deliberate supply-chain hardening, but
+        # better-sqlite3 is a native addon and cannot load without its build
+        # step. Rebuild just that one package rather than dropping the flag.
+      - run: npm rebuild better-sqlite3
       - run: npx tsc -p config/tsconfig.json --skipLibCheck --noEmit
       - run: npm run test:governance
 
@@ -46,12 +54,23 @@ jobs:
         node-version: ["20.x", "22.x"]
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          # packages/agentdb is a submodule; tests/issue-fixes.test.ts asserts
+          # on its source, and it is empty without this.
+          submodules: recursive
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: ${{ matrix.node-version }}
           cache: npm
           cache-dependency-path: agentic-flow/package-lock.json
       - run: npm ci --ignore-scripts
+        # --ignore-scripts is deliberate supply-chain hardening, but
+        # better-sqlite3 is a native addon and cannot load without its build
+        # step. Rebuild just that one package rather than dropping the flag.
+      - run: npm rebuild better-sqlite3
+        # backwards-compatibility.test.ts imports the built package from dist/,
+        # so the build has to run before the suite.
+      - run: npm run build
       - run: npm test
 
   package:
@@ -61,12 +80,20 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          # packages/agentdb is a submodule; tests/issue-fixes.test.ts asserts
+          # on its source, and it is empty without this.
+          submodules: recursive
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "22.x"
           cache: npm
           cache-dependency-path: agentic-flow/package-lock.json
       - run: npm ci --ignore-scripts
+        # --ignore-scripts is deliberate supply-chain hardening, but
+        # better-sqlite3 is a native addon and cannot load without its build
+        # step. Rebuild just that one package rather than dropping the flag.
+      - run: npm rebuild better-sqlite3
       - run: npm run build
       - run: npm pack --dry-run
 

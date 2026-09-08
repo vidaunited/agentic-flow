@@ -3,7 +3,7 @@
  * Target: <50ms P50 for task orchestration (5x faster than v1.0)
  */
 
-import { benchmark, benchmarkSuite, formatDuration } from '../utils/benchmark';
+import { benchmark, benchmarkSuite, formatDuration, recordBenchmarkResults } from '../utils/benchmark';
 
 interface Task {
   id: string;
@@ -177,6 +177,9 @@ export async function runTaskOrchestrationBenchmark(): Promise<void> {
       name: 'task-orchestration',
     }
   );
+
+  // Feed the shared results file the regression analysis and report read.
+  await recordBenchmarkResults(result);
 
   const targetP50 = 50; // ms
   const targetMet = result.p50 <= targetP50;

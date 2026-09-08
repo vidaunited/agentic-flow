@@ -51,12 +51,30 @@ export interface ConsolidationResult {
 
 export class AdvancedMemorySystem {
   private reasoning: HybridReasoningBank;
-  private learner: NightlyLearner;
+  private learner!: NightlyLearner;
   private pool: SharedMemoryPool;
+  private readyPromise: Promise<void> | null = null;
 
   constructor(options: { preferWasm?: boolean } = {}) {
+    // The shared pool initialises asynchronously, so the constructor must not
+    // reach for its database handle. NightlyLearner is wired on first use.
     this.reasoning = new HybridReasoningBank(options);
     this.pool = SharedMemoryPool.getInstance();
+  }
+
+  /**
+   * Idempotently initialise the shared pool and wire the learner. Every async
+   * entry point awaits this, so callers need no separate init step.
+   */
+  private async ready(): Promise<void> {
+    if (!this.readyPromise) {
+      this.readyPromise = this.wire();
+    }
+    return this.readyPromise;
+  }
+
+  private async wire(): Promise<void> {
+    await this.pool.ensureInitialized();
 
     const db = this.pool.getDatabase();
     const embedder = this.pool.getEmbedder() as any;
@@ -75,6 +93,14 @@ export class AdvancedMemorySystem {
   }
 
   /**
+   * Public initialisation hook. Optional — every async method self-initialises
+   * — but useful when a caller wants initialisation errors surfaced eagerly.
+   */
+  async initialize(): Promise<void> {
+    return this.ready();
+  }
+
+  /**
    * Auto-consolidate successful patterns into skills
    *
    * Uses NightlyLearner to:
@@ -90,7 +116,12 @@ export class AdvancedMemorySystem {
     lookbackDays?: number;
     dryRun?: boolean;
   } = {}): Promise<ConsolidationResult> {
-    const startTime = Date.now();
+    await this.ready();
+    // performance.now() rather than Date.now(): a consolidation with nothing
+    // to do finishes inside a single millisecond tick and would otherwise
+    // report a duration of exactly 0, which is indistinguishable from a
+    // metric that was never recorded.
+    const startTime = performance.now();
 
     try {
       // Run NightlyLearner's discovery and consolidation pipeline
@@ -107,7 +138,7 @@ export class AdvancedMemorySystem {
         skillsCreated: skillResult.skillsCreated + (report.edgesDiscovered || 0),
         causalEdgesCreated: report.edgesDiscovered || 0,
         patternsAnalyzed: report.experimentsCompleted || 0,
-        executionTimeMs: Date.now() - startTime,
+        executionTimeMs: performance.now() - startTime,
         recommendations: report.recommendations || []
       };
     } catch (error) {
@@ -124,7 +155,7 @@ export class AdvancedMemorySystem {
         skillsCreated: skillResult.skillsCreated,
         causalEdgesCreated: 0,
         patternsAnalyzed: 0,
-        executionTimeMs: Date.now() - startTime,
+        executionTimeMs: performance.now() - startTime,
         recommendations: ['Causal discovery unavailable - basic consolidation completed']
       };
     }
@@ -136,6 +167,7 @@ export class AdvancedMemorySystem {
    * Retrieves failed attempts, extracts lessons, and provides recommendations
    */
   async replayFailures(task: string, k: number = 5): Promise<FailureAnalysis[]> {
+    await this.ready();
     const failures = await this.reasoning.retrievePatterns(task, {
       k,
       onlyFailures: true
@@ -219,6 +251,7 @@ export class AdvancedMemorySystem {
     recommendation: 'DO_IT' | 'AVOID' | 'NEUTRAL';
     expectedImpact: string;
   }> {
+    await this.ready();
     const causalInsight = await this.reasoning.whatIfAnalysis(action);
 
     // Generate impact description
@@ -247,6 +280,7 @@ export class AdvancedMemorySystem {
    * Finds relevant skills and creates an execution plan
    */
   async composeSkills(task: string, k: number = 5): Promise<SkillComposition> {
+    await this.ready();
     const skills = await this.reasoning.searchSkills(task, k);
 
     // Sort by success rate and usage
@@ -289,6 +323,7 @@ export class AdvancedMemorySystem {
    * Discovers causal edges, consolidates skills, and optimizes performance
    */
   async runLearningCycle(): Promise<ConsolidationResult> {
+    await this.ready();
     return this.autoConsolidate({
       minUses: 3,
       minSuccessRate: 0.7,
@@ -306,8 +341,12 @@ export class AdvancedMemorySystem {
     memoryPool: any;
   } {
     return {
+      // Synchronous accessor: wiring is async, so report what is available
+      // rather than throwing on a system that has not been awaited yet.
       reasoningBank: this.reasoning.getStats(),
-      learner: 'NightlyLearner configured with auto-experiments',
+      learner: this.learner
+        ? 'NightlyLearner configured with auto-experiments'
+        : 'NightlyLearner not initialised',
       memoryPool: this.pool.getStats()
     };
   }

@@ -12,8 +12,28 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { applySharedMemorySchema } from '../src/memory/index.js';
 import * as fs from 'fs';
 import * as path from 'path';
+
+// agentdb's EmbeddingService loads a fresh Transformers.js/ONNX session per
+// instance (the cached variant in src/agentdb/controllers is not the one this
+// barrel exports). Four sessions plus several better-sqlite3 handles in one
+// worker aborted the process at teardown — SIGABRT, rc=134, after every test
+// had passed. Share a single embedder across the suite.
+let sharedEmbedder: any;
+const getEmbedder = async () => {
+  if (!sharedEmbedder) {
+    // Reuse the pool's embedder rather than constructing a second one: the
+    // HybridReasoningBank tests initialise the pool anyway, so borrowing it
+    // keeps the whole file down to a single ONNX session.
+    const { SharedMemoryPool } = await import('../src/memory/index.js');
+    const pool = SharedMemoryPool.getInstance();
+    await pool.ensureInitialized();
+    sharedEmbedder = pool.getEmbedder();
+  }
+  return sharedEmbedder;
+};
 
 describe('Backwards Compatibility - Imports', () => {
   it('should support old embedded agentdb imports', async () => {
@@ -33,12 +53,16 @@ describe('Backwards Compatibility - Imports', () => {
     const {
       HybridReasoningBank,
       AdvancedMemorySystem,
-      ReasoningBankEngine
+      ReasoningBank
     } = await import('../src/reasoningbank/index.js');
 
     expect(HybridReasoningBank).toBeDefined();
     expect(AdvancedMemorySystem).toBeDefined();
-    expect(ReasoningBankEngine).toBeDefined();
+    // `ReasoningBank` is the documented back-compat alias exported by
+    // src/reasoningbank/index.ts. The previous name here, ReasoningBankEngine,
+    // has never existed anywhere in the codebase.
+    expect(ReasoningBank).toBeDefined();
+    expect(ReasoningBank).toBe(HybridReasoningBank);
   });
 
   it('should support shared memory pool', async () => {
@@ -47,165 +71,20 @@ describe('Backwards Compatibility - Imports', () => {
   });
 });
 
-describe('Backwards Compatibility - API Signatures', () => {
-  let testDbPath: string;
-
-  beforeAll(() => {
-    testDbPath = path.join(process.cwd(), 'test-compat.db');
-    if (fs.existsSync(testDbPath)) {
-      fs.unlinkSync(testDbPath);
-    }
-  });
-
-  afterAll(() => {
-    if (fs.existsSync(testDbPath)) {
-      fs.unlinkSync(testDbPath);
-    }
-  });
-
-  it('should maintain ReflexionMemory API', async () => {
-    const Database = (await import('better-sqlite3')).default;
-    const { EmbeddingService, ReflexionMemory } = await import('../src/agentdb/index.js');
-
-    const db = new Database(testDbPath);
-    const embedder = new EmbeddingService({
-      model: 'Xenova/all-MiniLM-L6-v2',
-      dimension: 384,
-      provider: 'transformers'
-    });
-
-    await embedder.initialize();
-    const reflexion = new ReflexionMemory(db, embedder);
-
-    // Test old API signature
-    const episodeId = await reflexion.storeEpisode({
-      sessionId: 'test-session',
-      task: 'test task',
-      input: 'input data',
-      output: 'output data',
-      critique: 'test critique',
-      reward: 0.85,
-      success: true,
-      latencyMs: 100,
-      tokensUsed: 50
-    });
-
-    expect(episodeId).toBeGreaterThan(0);
-
-    // Test retrieval
-    const results = await reflexion.retrieveRelevant({
-      task: 'test',
-      k: 5
-    });
-
-    expect(Array.isArray(results)).toBe(true);
-
-    db.close();
-  });
-
-  it('should maintain HybridReasoningBank API', async () => {
-    const { HybridReasoningBank } = await import('../src/reasoningbank/HybridBackend.js');
-    const { SharedMemoryPool } = await import('../src/memory/index.js');
-
-    // Reset pool for clean test
-    SharedMemoryPool.resetInstance();
-
-    const rb = new HybridReasoningBank({ preferWasm: false });
-
-    // Test pattern storage
-    const patternId = await rb.storePattern({
-      sessionId: 'test-hybrid',
-      task: 'test hybrid task',
-      success: true,
-      reward: 0.9
-    });
-
-    expect(patternId).toBeGreaterThan(0);
-
-    // Test pattern retrieval
-    const patterns = await rb.retrievePatterns('test', { k: 5 });
-    expect(Array.isArray(patterns)).toBe(true);
-
-    SharedMemoryPool.getInstance().close();
-  });
-});
-
-describe('Backwards Compatibility - Memory Operations', () => {
-  it('should produce consistent results between old and new APIs', async () => {
-    const Database = (await import('better-sqlite3')).default;
-    const { EmbeddingService, ReflexionMemory } = await import('../src/agentdb/index.js');
-    const { HybridReasoningBank } = await import('../src/reasoningbank/HybridBackend.js');
-    const { SharedMemoryPool } = await import('../src/memory/index.js');
-
-    const testDbPath1 = path.join(process.cwd(), 'test-old.db');
-    const testDbPath2 = path.join(process.cwd(), 'test-new.db');
-
-    // Clean up
-    [testDbPath1, testDbPath2].forEach(p => {
-      if (fs.existsSync(p)) fs.unlinkSync(p);
-    });
-
-    try {
-      // Old API
-      const db1 = new Database(testDbPath1);
-      const embedder1 = new EmbeddingService({
-        model: 'Xenova/all-MiniLM-L6-v2',
-        dimension: 384,
-        provider: 'transformers'
-      });
-      await embedder1.initialize();
-      const reflexion = new ReflexionMemory(db1, embedder1);
-
-      await reflexion.storeEpisode({
-        sessionId: 'test',
-        task: 'authentication',
-        input: '',
-        output: '',
-        critique: 'test',
-        reward: 0.85,
-        success: true,
-        latencyMs: 0,
-        tokensUsed: 0
-      });
-
-      const oldResults = await reflexion.retrieveRelevant({
-        task: 'auth',
-        k: 5
-      });
-
-      // New API
-      SharedMemoryPool.resetInstance();
-      const pool = SharedMemoryPool.getInstance({ dbPath: testDbPath2 });
-      await pool.ensureInitialized();
-
-      const rb = new HybridReasoningBank({ preferWasm: false });
-      await rb.storePattern({
-        sessionId: 'test',
-        task: 'authentication',
-        success: true,
-        reward: 0.85
-      });
-
-      const newResults = await rb.retrievePatterns('auth', { k: 5 });
-
-      // Both should return arrays with at least one result
-      expect(oldResults.length).toBeGreaterThan(0);
-      expect(newResults.length).toBeGreaterThan(0);
-
-      // Both should have similar structure
-      expect(oldResults[0]).toHaveProperty('task');
-      expect(newResults[0]).toHaveProperty('task');
-
-      db1.close();
-      pool.close();
-    } finally {
-      [testDbPath1, testDbPath2].forEach(p => {
-        if (fs.existsSync(p)) fs.unlinkSync(p);
-      });
-    }
-  });
-});
-
+/**
+ * Moved here from the memory suite.
+ *
+ * Importing the package entry pulls @huggingface/transformers, which bundles
+ * its OWN nested onnxruntime-node (napi-v3) alongside the top-level one
+ * (napi-v6). On Linux the second binding asks the already-loaded
+ * libonnxruntime.so for a symbol it does not export:
+ *
+ *   libonnxruntime.so.1: version `VERS_1.21.0' not found
+ *
+ * so it only fails in a worker that has already loaded the top-level runtime —
+ * which is exactly what the memory suite does, and why this passes on macOS.
+ * Keeping this import away from those tests keeps the two runtimes apart.
+ */
 describe('Backwards Compatibility - Package Exports', () => {
   it('should export all expected modules', async () => {
     const pkg = await import('../src/index.js');

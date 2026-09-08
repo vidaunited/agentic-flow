@@ -356,6 +356,42 @@ export async function saveBenchmarkResults(
 }
 
 /**
+ * Record a benchmark result into the shared current-results file.
+ *
+ * The benchmark suites run as separate processes, and `data/results-v2.0.json`
+ * is read by BOTH the regression analysis and the HTML report generator — but
+ * nothing ever wrote it. Both consumers therefore swallowed the missing file
+ * and reported on an empty set, so the regression step passed while comparing
+ * nothing at all. Each suite now merges its results in by name as it finishes.
+ */
+export async function recordBenchmarkResults(
+  results: BenchmarkResult | BenchmarkResult[],
+  filePath?: string
+): Promise<void> {
+  // This module imports node builtins per-function; keep that convention.
+  const fs = await import('fs/promises');
+  const path = await import('path');
+
+  const target =
+    filePath || path.join(__dirname, '..', 'data', 'results-v2.0.json');
+  const incoming = Array.isArray(results) ? results : [results];
+
+  let existing: BenchmarkResult[] = [];
+  try {
+    const raw = JSON.parse(await fs.readFile(target, 'utf8'));
+    if (Array.isArray(raw?.results)) existing = raw.results;
+  } catch {
+    // First suite of the run — nothing to merge into.
+  }
+
+  // Merge by name so a re-run replaces its own entries rather than duplicating.
+  const byName = new Map(existing.map(r => [r.name, r]));
+  for (const r of incoming) byName.set(r.name, r);
+
+  await saveBenchmarkResults([...byName.values()], target);
+}
+
+/**
  * Load baseline benchmark results
  */
 export async function loadBaselineResults(filePath: string): Promise<BenchmarkResult[]> {

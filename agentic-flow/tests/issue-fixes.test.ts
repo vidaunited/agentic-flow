@@ -20,9 +20,16 @@ describe('issue #145: protobufjs CVE override', () => {
     const pkg = JSON.parse(readFileSync(join(REPO_ROOT, 'package.json'), 'utf-8'));
     expect(pkg.overrides).toBeDefined();
     expect(pkg.overrides.protobufjs).toBeDefined();
-    // Accept either a min-spec like ">=7.5.5" or an explicit safe version.
+    // Accept any spec that cannot resolve below 7.5.5 — a bare version, or a
+    // range like ">=7.5.5" / ">=8.2.0". The previous pattern only matched the
+    // literal ">=7.5.5" or a bare 7./8./9. prefix, so it REJECTED ">=8.2.0",
+    // which is strictly safer than what the issue asked for.
     const ver = String(pkg.overrides.protobufjs);
-    expect(/(>=\s*7\.5\.5|^7\.|^8\.|^9\.)/.test(ver)).toBe(true);
+    const m = ver.match(/^(?:>=\s*|\^|~)?(\d+)\.(\d+)\.(\d+)/);
+    expect(m, `unparseable protobufjs override: ${ver}`).not.toBeNull();
+    const [maj, min, patch] = m!.slice(1, 4).map(Number);
+    const safe = maj > 7 || (maj === 7 && (min > 5 || (min === 5 && patch >= 5)));
+    expect(safe, `protobufjs override ${ver} allows a version below 7.5.5`).toBe(true);
   });
 
   it('inner agentic-flow/package.json also declares the override', () => {
@@ -34,8 +41,12 @@ describe('issue #145: protobufjs CVE override', () => {
   it('npm ls protobufjs reports no vulnerable (<7.5.5) versions', () => {
     let out = '';
     try {
+      // PKG_INNER, not REPO_ROOT: the inner workspace is the tree that gets
+      // installed (CI runs `npm ci` there) and the one that ships. At the repo
+      // root there is no node_modules, so this matched nothing and the
+      // "found at least one protobufjs" assertion failed for want of a tree.
       out = execSync('npm ls protobufjs --all 2>/dev/null || true', {
-        cwd: REPO_ROOT,
+        cwd: PKG_INNER,
         encoding: 'utf-8',
         maxBuffer: 10 * 1024 * 1024,
       });
@@ -267,14 +278,11 @@ describe('issue #118 / #119: GNN RuvectorLayer pre-validation', () => {
     expect(layer.forward([1, 0, 0, 0, 0, 0, 0, 0]).length).toBe(4);
   });
 
-  it('agentdb-wrapper-enhanced pre-validates EMBEDDING_DIM % numHeads invariant', () => {
-    const src = readFileSync(
-      join(PKG_INNER, 'src/core/agentdb-wrapper-enhanced.ts'),
-      'utf-8',
-    );
-    // Look for the divisibility check we added.
-    expect(src).toMatch(/% numHeads !== 0|% numHeads\s*!==\s*0/);
-    // And the matching error message points users at the right config knobs.
-    expect(src).toMatch(/RuvectorLayer would panic|must both be divisible/);
-  });
+  // The EMBEDDING_DIM % numHeads assertion that lived here has been removed
+  // along with its subject. src/core/agentdb-wrapper-enhanced.ts was dead code
+  // — nothing imported it, src/core/index.ts did not export it, and it drove
+  // agentdb through controller.store/get/delete, an API that exists in neither
+  // the vendored nor the packaged agentdb. Its divisibility guard was the only
+  // one in the tree, but there is no live RuvectorLayer construction site for
+  // it to protect; if one is added, the guard belongs there.
 });

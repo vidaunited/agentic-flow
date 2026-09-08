@@ -3,7 +3,7 @@
  * Target: <2ms P50 for memory insert (125x faster than v1.0)
  */
 
-import { benchmark, benchmarkSuite, formatDuration } from '../utils/benchmark';
+import { benchmark, benchmarkSuite, formatDuration, recordBenchmarkResults } from '../utils/benchmark';
 
 /**
  * Mock Memory Store for benchmarking
@@ -97,6 +97,9 @@ export async function runMemoryInsertBenchmark(): Promise<void> {
       name: 'memory-insert',
     }
   );
+
+  // Feed the shared results file the regression analysis and report read.
+  await recordBenchmarkResults(result);
 
   const targetP50 = 2; // ms
   const targetMet = result.p50 <= targetP50;

@@ -4,7 +4,7 @@
   "node": "v20.0.0",
   "platform": "linux",
   "arch": "x64",
-  "description": "Baseline performance metrics from Agentic-Flow v1.0.0",
+  "description": "Reference performance TARGETS for Agentic-Flow v1.0.0. These are hand-authored figures, not recorded measurements.",
   "results": [
     {
       "name": "vector-search-1000",
@@ -137,6 +137,7 @@
     "totalBenchmarks": 7,
     "totalDuration": 5408000,
     "averageP50": 459.9,
-    "notes": "Baseline measurements from v1.0.0. These values represent the performance targets to improve upon in v2.0.0-alpha."
-  }
+    "notes": "Baseline measurements from v1.0.0. These values represent the performance targets to improve upon in v2.0.0-alpha. (Hand-authored targets \u2014 see the provenance field.)"
+  },
+  "provenance": "Hand-authored, not measured: the timestamp is an exact midnight, every result carries an empty samples array, and the values are round numbers. Comparisons against it therefore report very large improvement factors (>10000x) and cannot fail \u2014 treat them as a target check, not a regression gate. Replace with a recorded run to make the regression analysis meaningful."
 }

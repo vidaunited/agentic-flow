@@ -3,7 +3,7 @@
  * Target: <10ms P50 for agent spawn (10x faster than v1.0)
  */
 
-import { benchmark, benchmarkSuite, formatDuration } from '../utils/benchmark';
+import { benchmark, benchmarkSuite, formatDuration, recordBenchmarkResults } from '../utils/benchmark';
 
 /**
  * Mock Agent class for benchmarking
@@ -13,7 +13,8 @@ class MockAgent {
   private id: string;
   private type: string;
   private capabilities: string[];
-  private memory: Map<string, any>;
+  // `protected`, not `private`: MemoryAgent extends MockAgent and reads this.
+  protected memory: Map<string, any>;
 
   constructor(id: string, type: string, capabilities: string[] = []) {
     this.id = id;
@@ -72,6 +73,8 @@ export async function runAgentSpawnBenchmark(): Promise<void> {
       name: 'agent-spawn',
     }
   );
+
+  await recordBenchmarkResults(result);
 
   const targetP50 = 10; // ms
   const targetMet = result.p50 <= targetP50;

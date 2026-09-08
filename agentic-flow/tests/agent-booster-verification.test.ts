@@ -4,12 +4,25 @@
  * Confirms that Agent Booster is REAL and works as advertised
  */
 
-import { AgentBooster } from 'agent-booster';
+// `agent-booster` is an OPTIONAL native package: it lives in packages/ as a
+// Rust crate, is not declared as a dependency, and is not in the lockfile, so
+// it is absent on a clean checkout and in CI. The production code treats it the
+// same way — tests/issue-fixes.test.ts asserts that src/ may only reach it
+// through a dynamic import — so this suite loads it dynamically too and skips
+// itself when it is not installed, rather than failing at collection time.
+let AgentBooster: any;
+let boosterAvailable = false;
+try {
+  ({ AgentBooster } = await import('agent-booster'));
+  boosterAvailable = typeof AgentBooster === 'function';
+} catch {
+  boosterAvailable = false;
+}
 import { writeFileSync, readFileSync, unlinkSync } from 'fs';
 import { join } from 'path';
 
-describe('Agent Booster Integration - VERIFICATION', () => {
-  let booster: AgentBooster;
+describe.skipIf(!boosterAvailable)('Agent Booster Integration - VERIFICATION', () => {
+  let booster: any;
   const testFile = join(__dirname, '../test-file-agent-booster.ts');
 
   beforeEach(() => {

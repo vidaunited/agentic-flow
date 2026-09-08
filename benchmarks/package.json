@@ -16,7 +16,8 @@
     "benchmark:quick": "npm run benchmark -- --iterations=100 --warmup=10",
     "benchmark:report": "ts-node utils/report-generator.ts",
     "clean": "rm -rf data/*.db reports/*.html",
-    "validate": "npm run benchmark && npm run benchmark:regression"
+    "validate": "npm run benchmark && npm run benchmark:regression",
+    "benchmark:export": "ts-node utils/to-benchmark-action.ts"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",

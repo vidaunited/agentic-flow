@@ -15,7 +15,9 @@ import path from 'path';
 /**
  * Performance improvement targets
  */
-const PERFORMANCE_TARGETS = {
+// Typed as a string map: it is indexed by benchmark name at runtime, and an
+// object-literal type cannot be indexed by an arbitrary string.
+const PERFORMANCE_TARGETS: Record<string, number> = {
   'vector-search-1000': 150,      // 150x faster
   'vector-search-10000': 150,     // 150x faster
   'vector-search-100000': 150,    // 150x faster
@@ -77,7 +79,15 @@ export async function runRegressionAnalysis(): Promise<void> {
   console.log(`✅ Loaded ${currentResults.length} current benchmarks from v2.0.0-alpha`);
 
   // Compare each benchmark
-  const comparisons = [];
+  const comparisons: Array<{
+    benchmark: string;
+    baselineP50: number;
+    currentP50: number;
+    improvementFactor: number;
+    targetImprovement: number;
+    meetsTarget: boolean;
+    regressionResults: ReturnType<typeof compareWithBaseline>;
+  }> = [];
   let totalPassed = 0;
   let totalFailed = 0;
 

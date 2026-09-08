@@ -1,7 +1,7 @@
 // QUIC Coordinator Test Suite
 // Comprehensive tests for QUIC-enabled swarm coordination across all topologies
 
-import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { QuicCoordinator, SwarmAgent, SwarmMessage } from '../../src/swarm/quic-coordinator.js';
 import { QuicClient, QuicConnectionPool } from '../../src/transport/quic.js';
 
@@ -37,7 +37,7 @@ describe('QuicCoordinator', () => {
 
       await coordinator.start();
 
-      const state = coordinator.getState();
+      const state = await coordinator.getState();
       expect(state.swarmId).toBe('test-mesh');
       expect(state.topology).toBe('mesh');
       expect(state.stats.totalAgents).toBe(0);
@@ -73,7 +73,7 @@ describe('QuicCoordinator', () => {
       await coordinator.registerAgent(agent1);
       await coordinator.registerAgent(agent2);
 
-      const state = coordinator.getState();
+      const state = await coordinator.getState();
       expect(state.stats.totalAgents).toBe(2);
       expect(state.agents.has('agent-1')).toBe(true);
       expect(state.agents.has('agent-2')).toBe(true);
@@ -112,7 +112,7 @@ describe('QuicCoordinator', () => {
 
       await coordinator.broadcast(message);
 
-      const stats = coordinator.getState().stats;
+      const stats = (await coordinator.getState()).stats;
       expect(stats.totalMessages).toBeGreaterThan(0);
     });
   });
@@ -129,7 +129,7 @@ describe('QuicCoordinator', () => {
 
       await coordinator.start();
 
-      const state = coordinator.getState();
+      const state = await coordinator.getState();
       expect(state.topology).toBe('hierarchical');
     });
 
@@ -170,7 +170,7 @@ describe('QuicCoordinator', () => {
         capabilities: ['compute']
       });
 
-      const state = coordinator.getState();
+      const state = await coordinator.getState();
       expect(state.stats.totalAgents).toBe(3);
     });
   });
@@ -187,7 +187,7 @@ describe('QuicCoordinator', () => {
 
       await coordinator.start();
 
-      const state = coordinator.getState();
+      const state = await coordinator.getState();
       expect(state.topology).toBe('ring');
     });
 
@@ -224,7 +224,7 @@ describe('QuicCoordinator', () => {
 
       await coordinator.sendMessage(message);
 
-      const stats = coordinator.getState().stats;
+      const stats = (await coordinator.getState()).stats;
       expect(stats.totalMessages).toBeGreaterThan(0);
     });
   });
@@ -241,7 +241,7 @@ describe('QuicCoordinator', () => {
 
       await coordinator.start();
 
-      const state = coordinator.getState();
+      const state = await coordinator.getState();
       expect(state.topology).toBe('star');
     });
 
@@ -276,7 +276,7 @@ describe('QuicCoordinator', () => {
         });
       }
 
-      const state = coordinator.getState();
+      const state = await coordinator.getState();
       expect(state.stats.totalAgents).toBe(4);
     });
   });
@@ -304,7 +304,7 @@ describe('QuicCoordinator', () => {
 
       await coordinator.syncState();
 
-      const stats = coordinator.getState().stats;
+      const stats = (await coordinator.getState()).stats;
       expect(stats.totalMessages).toBeGreaterThan(0);
     });
 
@@ -331,7 +331,7 @@ describe('QuicCoordinator', () => {
       // Wait for heartbeat
       await new Promise(resolve => setTimeout(resolve, 600));
 
-      const stats = coordinator.getState().stats;
+      const stats = (await coordinator.getState()).stats;
       expect(stats.totalMessages).toBeGreaterThan(0);
     });
   });
@@ -416,11 +416,11 @@ describe('QuicCoordinator', () => {
         capabilities: ['compute']
       });
 
-      expect(coordinator.getState().stats.totalAgents).toBe(1);
+      expect((await coordinator.getState()).stats.totalAgents).toBe(1);
 
       await coordinator.unregisterAgent('agent-1');
 
-      expect(coordinator.getState().stats.totalAgents).toBe(0);
+      expect((await coordinator.getState()).stats.totalAgents).toBe(0);
     });
 
     it('should enforce max agents limit', async () => {

@@ -3,8 +3,12 @@
  * Target: <10ms P50 for 1M vectors (150x faster than v1.0)
  */
 
-import { benchmark, benchmarkSuite, formatDuration } from '../utils/benchmark';
-import { AgentDB } from '../../packages/agentdb/src/core/AgentDB';
+import { benchmark, benchmarkSuite, formatDuration, recordBenchmarkResults } from '../utils/benchmark';
+// Import the `agentdb` package this benchmark declares as a dependency,
+// not ../../packages/agentdb/src: that path is a git submodule (empty on a
+// plain checkout, and absent in CI), and reaching into a dependency's
+// TypeScript source also drags its whole compilation into this project.
+import { AgentDB } from 'agentdb';
 import path from 'path';
 import fs from 'fs/promises';
 
@@ -18,14 +22,20 @@ interface VectorSearchBenchmarkConfig {
 /**
  * Generate random embedding vector
  */
-function generateEmbedding(dimensions: number = 1536): number[] {
-  const vector: number[] = [];
+function generateEmbedding(dimensions: number = 1536): Float32Array {
+  // Float32Array rather than number[]: the vector backend's insert/search take
+  // Float32Array, and converting at every call site is both noisier and an
+  // extra copy per query inside the measured loop.
+  const vector = new Float32Array(dimensions);
   for (let i = 0; i < dimensions; i++) {
-    vector.push(Math.random() * 2 - 1); // Range: -1 to 1
+    vector[i] = Math.random() * 2 - 1; // Range: -1 to 1
   }
   // Normalize
-  const magnitude = Math.sqrt(vector.reduce((sum, val) => sum + val * val, 0));
-  return vector.map(val => val / magnitude);
+  let sumSquares = 0;
+  for (let i = 0; i < dimensions; i++) sumSquares += vector[i] * vector[i];
+  const magnitude = Math.sqrt(sumSquares);
+  for (let i = 0; i < dimensions; i++) vector[i] /= magnitude;
+  return vector;
 }
 
 /**
@@ -41,21 +51,22 @@ async function setupVectorDB(vectorCount: number, dimensions: number = 1536): Pr
     // Ignore if doesn't exist
   }
 
+  // AgentDBConfig takes `vectorDimension`; index type and distance metric are
+  // properties of the backend, not of this config object.
   const db = new AgentDB({
     dbPath,
-    dimensions,
-    indexType: 'hnsw',
-    distanceMetric: 'cosine',
-    enableCache: true,
-    cacheSize: 10000,
+    vectorDimension: dimensions,
   });
+
+  // vectorBackend is only usable once the database has been initialised.
+  await db.initialize();
 
   console.log(`\n📦 Inserting ${vectorCount.toLocaleString()} vectors...`);
   const batchSize = 1000;
   const batches = Math.ceil(vectorCount / batchSize);
 
   for (let batch = 0; batch < batches; batch++) {
-    const vectors = [];
+    const vectors: Array<{ id: string; embedding: Float32Array; metadata?: Record<string, any> }> = [];
     const currentBatchSize = Math.min(batchSize, vectorCount - batch * batchSize);
 
     for (let i = 0; i < currentBatchSize; i++) {
@@ -70,7 +81,7 @@ async function setupVectorDB(vectorCount: number, dimensions: number = 1536): Pr
       });
     }
 
-    await db.insertVectors(vectors);
+    db.vectorBackend.insertBatch(vectors);
 
     if (batch % 10 === 0) {
       const progress = ((batch / batches) * 100).toFixed(1);
@@ -88,12 +99,31 @@ async function setupVectorDB(vectorCount: number, dimensions: number = 1536): Pr
  * Vector Search Benchmark Suite
  */
 export async function runVectorSearchBenchmarks(): Promise<void> {
-  const configs: VectorSearchBenchmarkConfig[] = [
+  const allConfigs: VectorSearchBenchmarkConfig[] = [
     { vectorCount: 1000, dimensions: 1536, k: 10, targetP50Ms: 1 },
     { vectorCount: 10000, dimensions: 1536, k: 10, targetP50Ms: 5 },
     { vectorCount: 100000, dimensions: 1536, k: 10, targetP50Ms: 8 },
     { vectorCount: 1000000, dimensions: 1536, k: 10, targetP50Ms: 10 },
   ];
+
+  // The 1M-vector rung holds 1,000,000 x 1536 float32 = ~6.1 GB of vectors
+  // before any index overhead, which a standard CI runner cannot complete
+  // inside the job timeout. Cap the scale there unless explicitly asked for
+  // the full sweep, so CI measures something real instead of dying.
+  //
+  //   BENCH_MAX_VECTORS=1000000   full sweep (the default off-CI)
+  //   BENCH_MAX_VECTORS=10000     quick local run
+  const maxVectors = Number(
+    process.env.BENCH_MAX_VECTORS ?? (process.env.CI ? 100000 : 1000000)
+  );
+  const configs = allConfigs.filter(c => c.vectorCount <= maxVectors);
+
+  if (configs.length < allConfigs.length) {
+    const skipped = allConfigs.length - configs.length;
+    console.log(
+      `\nℹ️  Skipping ${skipped} config(s) above BENCH_MAX_VECTORS=${maxVectors.toLocaleString()}.`
+    );
+  }
 
   console.log('\n🎯 Vector Search Performance Benchmarks');
   console.log('Target: <10ms P50 for 1M vectors (150x faster than v1.0)');
@@ -112,7 +142,7 @@ export async function runVectorSearchBenchmarks(): Promise<void> {
     // Run benchmark
     const result = await benchmark(
       async () => {
-        await db.search(queryVector, config.k);
+        db.vectorBackend.search(queryVector, config.k);
       },
       {
         iterations: 1000,
@@ -120,6 +150,9 @@ export async function runVectorSearchBenchmarks(): Promise<void> {
         name: `vector-search-${config.vectorCount}`,
       }
     );
+
+    // Feed the shared results file the regression analysis and HTML report read.
+    await recordBenchmarkResults(result);
 
     // Validate against target
     const targetMet = result.p50 <= config.targetP50Ms;
@@ -187,27 +220,27 @@ export async function runAdvancedVectorBenchmarks(): Promise<void> {
   const benchmarks = [
     {
       name: 'k=1 (single nearest neighbor)',
-      fn: async () => db.search(queryVector, 1),
+      fn: async () => db.vectorBackend.search(queryVector, 1),
       options: { iterations: 1000, warmup: 100 },
     },
     {
       name: 'k=5 (5 nearest neighbors)',
-      fn: async () => db.search(queryVector, 5),
+      fn: async () => db.vectorBackend.search(queryVector, 5),
       options: { iterations: 1000, warmup: 100 },
     },
     {
       name: 'k=10 (10 nearest neighbors)',
-      fn: async () => db.search(queryVector, 10),
+      fn: async () => db.vectorBackend.search(queryVector, 10),
       options: { iterations: 1000, warmup: 100 },
     },
     {
       name: 'k=50 (50 nearest neighbors)',
-      fn: async () => db.search(queryVector, 50),
+      fn: async () => db.vectorBackend.search(queryVector, 50),
       options: { iterations: 500, warmup: 50 },
     },
     {
       name: 'k=100 (100 nearest neighbors)',
-      fn: async () => db.search(queryVector, 100),
+      fn: async () => db.vectorBackend.search(queryVector, 100),
       options: { iterations: 500, warmup: 50 },
     },
   ];
@@ -239,14 +272,14 @@ export async function runDistanceMetricBenchmarks(): Promise<void> {
 
     const db = new AgentDB({
       dbPath,
-      dimensions: 1536,
-      indexType: 'hnsw',
-      distanceMetric: metric,
+      vectorDimension: 1536,
     });
+
+    await db.initialize();
 
     // Insert vectors
     console.log(`\n📦 Setting up ${metric} distance DB...`);
-    const vectors = [];
+    const vectors: Array<{ id: string; embedding: Float32Array; metadata?: Record<string, any> }> = [];
     for (let i = 0; i < vectorCount; i++) {
       vectors.push({
         id: `vec-${i}`,
@@ -254,12 +287,12 @@ export async function runDistanceMetricBenchmarks(): Promise<void> {
         metadata: { index: i },
       });
     }
-    await db.insertVectors(vectors);
+    db.vectorBackend.insertBatch(vectors);
 
     const queryVector = generateEmbedding(1536);
 
     const result = await benchmark(
-      async () => db.search(queryVector, 10),
+      async () => db.vectorBackend.search(queryVector, 10),
       {
         iterations: 1000,
         warmup: 100,
