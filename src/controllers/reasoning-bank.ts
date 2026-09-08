@@ -133,7 +133,7 @@ export class ReasoningBankController {
     });
 
     // Map results to ReasoningPattern interface
-    return results.map(result => ({
+    const patterns = results.map(result => ({
       sessionId: result.metadata.sessionId,
       task: result.metadata.task,
       input: result.metadata.input,
@@ -146,6 +146,34 @@ export class ReasoningBankController {
       timestamp: result.metadata.timestamp,
       similarity: result.similarity
     }));
+
+    // Enforce the caller's predicates on what came back. The filter handed to
+    // vectorSearch above is a push-down optimisation, not a guarantee:
+    // AgentDBWrapper is an interface with no implementation in this repo, and a
+    // backend that cannot evaluate an arbitrary JS predicate would silently
+    // return rows the caller explicitly excluded. Re-applying is idempotent
+    // when the backend did honour it.
+    return patterns.filter(p => this.matchesSearchOptions(p, options));
+  }
+
+  /**
+   * Whether a pattern satisfies the caller-supplied search predicates.
+   *
+   * Deliberately does not re-check the `type` discriminator: that is a
+   * storage-layer concern already applied in the query, whereas these are the
+   * promises made to the caller.
+   */
+  private matchesSearchOptions(
+    pattern: ReasoningPattern,
+    options: PatternSearchOptions
+  ): boolean {
+    if (options.onlySuccesses && !pattern.success) return false;
+    if (options.onlyFailures && pattern.success) return false;
+    // Written as !(>=) so a missing or NaN reward is excluded rather than kept.
+    if (options.minReward !== undefined && !(pattern.reward >= options.minReward)) {
+      return false;
+    }
+    return true;
   }
 
   /**

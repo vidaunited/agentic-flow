@@ -260,7 +260,26 @@ describe('Memory Controllers Integration', () => {
         reward: 0.2
       });
 
-      // 2. Successful attempt with pattern
+      // 2. Successful retry, reflected on.
+      //
+      // The assertion at the end of this test is on getImprovementChain, which
+      // is last attempt's reward minus the first's -- so it needs at least two
+      // ATTEMPTS. Previously the cycle stored one failed reflexion and then a
+      // successful *pattern*, which is a different store; the chain saw a
+      // single attempt and correctly reported 0 improvement against an
+      // expectation of > 0.5. The retry the narrative describes was never
+      // actually written.
+      await reflexionMemory.storeReflexion({
+        taskId,
+        attempt: 2,
+        action: 'Wrote tests first, then implemented the feature',
+        observation: 'Zero bugs in production',
+        reflection: 'Writing tests first caught the regressions early',
+        success: true,
+        reward: 0.95
+      });
+
+      // 3. Successful attempt with pattern
       await reasoningBank.storePattern({
         sessionId: `${taskId}-success`,
         task: 'TDD implementation',
@@ -271,7 +290,7 @@ describe('Memory Controllers Integration', () => {
         critique: 'TDD prevented all issues'
       });
 
-      // 3. Create reusable skill
+      // 4. Create reusable skill
       await skillLibrary.addSkill({
         id: 'tdd-workflow',
         name: 'TDD Workflow',
@@ -281,7 +300,7 @@ describe('Memory Controllers Integration', () => {
         tags: ['testing', 'tdd']
       });
 
-      // 4. Establish causal relationship
+      // 5. Establish causal relationship
       await causalGraph.addCausalEdge({
         cause: 'tdd-workflow',
         effect: 'zero-production-bugs',

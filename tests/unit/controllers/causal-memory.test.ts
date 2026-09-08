@@ -108,6 +108,32 @@ describe('CausalMemoryGraphController', () => {
       expect(effects.every(e => e.confidence >= 0.7)).toBe(true);
     });
 
+    it('should apply minConfidence to the decayed confidence of a multi-hop path', async () => {
+      // Two edges that each clear the floor on their own, but whose combined
+      // path does not: 0.8 * 0.8 = 0.64 against a floor of 0.7.
+      //
+      // minConfidence used to be applied only to the raw edge as it came out
+      // of the query, never to the composite confidence computed during
+      // traversal, so this path was returned to a caller who had explicitly
+      // asked not to see anything below 0.7.
+      const mockResults = [
+        { metadata: { cause: 'a', effect: 'b', confidence: 0.8 } },
+        { metadata: { cause: 'b', effect: 'c', confidence: 0.8 } }
+      ];
+
+      (mockAgentDB.query as Mock).mockResolvedValue(mockResults);
+
+      const effects = await controller.getEffects('a', {
+        maxDepth: 3,
+        minConfidence: 0.7
+      });
+
+      // The direct edge survives; the 0.64 two-hop path does not.
+      expect(effects.map(e => e.effect)).toContain('b');
+      expect(effects.map(e => e.effect)).not.toContain('c');
+      expect(effects.every(e => e.confidence >= 0.7)).toBe(true);
+    });
+
     it('should traverse multi-level effects', async () => {
       const mockResults = [
         {

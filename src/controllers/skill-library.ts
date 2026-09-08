@@ -48,6 +48,10 @@ export interface Skill {
   successRate?: number;
   usageCount?: number;
   avgExecutionTime?: number;
+  /** Version this one was evolved from, if any. */
+  parentVersion?: string;
+  /** What changed relative to `parentVersion`. */
+  changes?: string;
 }
 
 export interface SkillUsage {
@@ -139,6 +143,8 @@ export class SkillLibraryController {
         successRate: skill.successRate || 0,
         usageCount: skill.usageCount || 0,
         avgExecutionTime: skill.avgExecutionTime || 0,
+        parentVersion: skill.parentVersion,
+        changes: skill.changes,
         timestamp: Date.now(),
         type: 'skill'
       }
@@ -173,7 +179,9 @@ export class SkillLibraryController {
       capabilities: result.metadata.capabilities,
       successRate: result.metadata.successRate,
       usageCount: result.metadata.usageCount,
-      avgExecutionTime: result.metadata.avgExecutionTime
+      avgExecutionTime: result.metadata.avgExecutionTime,
+      parentVersion: result.metadata.parentVersion,
+      changes: result.metadata.changes
     };
   }
 
@@ -220,26 +228,23 @@ export class SkillLibraryController {
       throw new Error(`Skill ${evolution.skillId} not found`);
     }
 
-    // Create new version
+    // Create the new version with its lineage already attached.
+    //
+    // This previously inserted the version and then issued a second update to
+    // stamp parentVersion/changes onto it. That was a two-step write for a
+    // single logical record: it left a window in which the new version existed
+    // with no lineage, and the update re-selected the row by
+    // (skillId, version) rather than by the id just returned, so a duplicate
+    // version would have been stamped too. Writing it once removes both.
     await this.addSkill({
       ...currentSkill,
       version: evolution.version,
       code: evolution.code,
       testCases: evolution.testCases || currentSkill.testCases,
       successRate: 0, // Reset for new version
-      usageCount: 0
-    });
-
-    // Link to previous version
-    await this.agentDB.update({
-      filter: (metadata: any) =>
-        metadata.type === 'skill' &&
-        metadata.skillId === evolution.skillId &&
-        metadata.version === evolution.version,
-      updates: {
-        parentVersion: currentSkill.version,
-        changes: evolution.changes
-      }
+      usageCount: 0,
+      parentVersion: currentSkill.version,
+      changes: evolution.changes
     });
   }
 
@@ -368,7 +373,7 @@ export class SkillLibraryController {
       }
     });
 
-    return results.map((result: any) => ({
+    const skills = results.map((result: any) => ({
       id: result.metadata.skillId,
       name: result.metadata.name,
       description: result.metadata.description,
@@ -379,6 +384,24 @@ export class SkillLibraryController {
       successRate: result.metadata.successRate,
       usageCount: result.metadata.usageCount
     }));
+
+    // Enforce the caller's predicates on what came back; the filter passed to
+    // query() is a push-down optimisation, not a guarantee. See the note in
+    // ReasoningBankController.searchPatterns.
+    return skills.filter((skill: Skill) => {
+      if (options.tags && options.tags.length > 0) {
+        if (!skill.tags || !options.tags.some(tag => skill.tags!.includes(tag))) {
+          return false;
+        }
+      }
+      // Written as !(>=) so a missing or NaN success rate is excluded.
+      if (options.minSuccessRate !== undefined &&
+          !(skill.successRate! >= options.minSuccessRate)) {
+        return false;
+      }
+      if (options.category && skill.category !== options.category) return false;
+      return true;
+    });
   }
 
   /**

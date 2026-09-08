@@ -43,6 +43,13 @@ export interface CausalEdge {
 
 export interface CausalEffect {
   effect: string;
+  /**
+   * The cause node. Populated by backward traversal (getRootCauses /
+   * backwardInference), where the node being reported IS a cause -- previously
+   * such results carried it in `effect`, so a caller inspecting a backward
+   * result could not tell a cause from an effect.
+   */
+  cause?: string;
   confidence: number;
   mechanism?: string;
   path?: string[];
@@ -131,7 +138,15 @@ export class CausalMemoryGraphController {
 
     const effects: CausalEffect[] = [];
 
-    for (const result of results) {
+    // Verify the rows actually describe edges out of `cause` at or above the
+    // confidence floor. The predicate handed to query() is a push-down
+    // optimisation, not a guarantee -- a backend that cannot evaluate it would
+    // otherwise have unrelated edges treated as effects of this node.
+    const edges = results.filter((r: any) =>
+      r.metadata?.cause === cause && r.metadata?.confidence >= minConfidence
+    );
+
+    for (const result of edges) {
       effects.push({
         effect: result.metadata.effect,
         confidence: result.metadata.confidence,
@@ -147,9 +162,16 @@ export class CausalMemoryGraphController {
         );
 
         indirectEffects.forEach(ie => {
+          const decayed = ie.confidence * result.metadata.confidence;
+          // minConfidence was only ever applied to the raw edge, never to the
+          // composite confidence of a multi-hop path. A caller asking for
+          // >= 0.7 could therefore be handed a 0.5 path built from two 0.7
+          // edges, with no indication it was below the floor they set.
+          if (decayed < minConfidence) return;
+
           effects.push({
             effect: ie.effect,
-            confidence: ie.confidence * result.metadata.confidence, // Decay
+            confidence: decayed,
             mechanism: ie.mechanism,
             path: [cause, ...ie.path!]
           });
@@ -181,9 +203,15 @@ export class CausalMemoryGraphController {
 
     const causes: CausalEffect[] = [];
 
-    for (const result of results) {
+    // Same verification as getEffects, on the incoming side of the edge.
+    const edges = results.filter((r: any) =>
+      r.metadata?.effect === effect && r.metadata?.confidence >= minConfidence
+    );
+
+    for (const result of edges) {
       causes.push({
         effect: result.metadata.cause,
+        cause: result.metadata.cause,
         confidence: result.metadata.confidence,
         mechanism: result.metadata.mechanism,
         path: [result.metadata.cause, effect]
@@ -197,9 +225,13 @@ export class CausalMemoryGraphController {
         );
 
         rootCauses.forEach(rc => {
+          const decayed = rc.confidence * result.metadata.confidence;
+          if (decayed < minConfidence) return;
+
           causes.push({
             effect: rc.effect,
-            confidence: rc.confidence * result.metadata.confidence,
+            cause: rc.cause ?? rc.effect,
+            confidence: decayed,
             mechanism: rc.mechanism,
             path: [...rc.path!, effect]
           });
