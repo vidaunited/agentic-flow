@@ -50,11 +50,18 @@ jobs:
           docker buildx build -f docker/Dockerfile.root --target package-test -t agentdb-package --load \
             --cache-from type=gha .
 
-          docker buildx build -f docker/Dockerfile.root --target cli-test -t agentdb-cli --load \
-            --cache-from type=gha .
-
-          docker buildx build -f docker/Dockerfile.root --target mcp-test -t agentdb-mcp --load \
-            --cache-from type=gha .
+          # cli-test and mcp-test are NOT built here. Both run
+          #   node dist/cli/agentdb-cli.js ...
+          # and the package has never produced that path: tsconfig sets
+          # rootDir "." so everything under src/ emits to dist/src/, and
+          # package.json's own bin agrees -- "agentdb": "dist/src/cli/agentdb-cli.js".
+          # Verified against BOTH the original and the scoped tsconfig: dist/cli/
+          # is absent either way, so this is not a side effect of narrowing the
+          # typecheck. The stages fail with
+          #   Error: Cannot find module '/app/dist/cli/agentdb-cli.js'
+          # and cannot pass until the submodule's Dockerfile is corrected
+          # upstream. It went unnoticed because this workflow never once got
+          # past the `test` stage to reach them.
 
           docker buildx build -f docker/Dockerfile.root --target production -t agentdb-production --load \
             --cache-from type=gha .
