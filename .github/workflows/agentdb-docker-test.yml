@@ -154,7 +154,12 @@ jobs:
   multi-platform:
     name: Multi-Platform Build
     runs-on: ubuntu-latest
-    timeout-minutes: 90  # QEMU-emulated linux/arm64; the same multi-arch agentdb build in docker-publish.yml was killed at exactly 60m
+    # MEASURED 2026-09-08 on main run 34256862187: 6m07s (17:24:07 -> 17:30:14),
+    # its first ever completion. The previous 90 was extrapolated from a
+    # DIFFERENT workflow's multi-arch build dying at 60m, and from this job
+    # being cancelled at 46m45s while the vitest suite still ran ahead of it.
+    # 20 is ~3x the real figure, which is ample for QEMU variance.
+    timeout-minutes: 20
     # Was push-to-main only, which made this the one job that could never be
     # run on demand -- so it had no measured duration and its timeout was a
     # guess. A dispatch can now exercise it deliberately.
