@@ -58,6 +58,11 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          # Dockerfile.agentdb copies from packages/agentdb, which is a
+          # submodule. Without this it is an empty directory and the COPY of
+          # its package*.json fails before anything is built.
+          submodules: recursive
 
       # This repository has no DOCKERHUB_* secrets, so docker/login-action
       # failed with "Username and password required" and fail-fast cancelled the

@@ -34,11 +34,33 @@ RUN npm install --omit=dev --ignore-scripts
 # =============================================================================
 FROM base AS builder
 
-# Copy dependencies
-COPY --from=dependencies /app/node_modules ./node_modules
-COPY --from=dependencies /app/package*.json ./
+# Build-time dependencies, installed separately from the runtime set above.
+#
+# The repository root is not an npm workspace, so installing at the root does
+# not populate agentic-flow/node_modules. tsc then resolved the inner package's
+# imports against /app/node_modules — the ROOT's tree — which is a different
+# dependency set. Observed in CI:
+#
+#   src/workers/dispatch-service.ts(937,35): error TS2307:
+#     Cannot find module 'glob'
+#   src/intelligence/RuVectorIntelligence.ts(75,38): error TS2339:
+#     Property 'poincareDistance' does not exist on type ...@ruvector/attention
+#
+# glob is a dependency of agentic-flow and absent from the root entirely;
+# @ruvector/attention is ^0.1.2 at the root against the ^0.1.4 the inner
+# package pins, and 0.1.2 does not export poincareDistance,
+# projectToPoincareBall or AttentionType.
+#
+# Dev dependencies are included here because the inner build needs its full
+# toolchain; the production stage below still copies the lean --omit=dev
+# layer, so the shipped image does not grow.
+COPY package*.json ./
+COPY agentic-flow/package*.json ./agentic-flow/
+RUN npm install --ignore-scripts \
+    && npm --prefix agentic-flow install --ignore-scripts
 
-# Copy source code
+# Copy source code. node_modules is in .dockerignore, so this merges into the
+# tree above without replacing the installs.
 COPY agentic-flow ./agentic-flow
 COPY tsconfig.json ./
 
