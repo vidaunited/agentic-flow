@@ -10,6 +10,12 @@ on:
     branches: [ main ]
     paths:
       - 'packages/agentdb/**'
+      # Without this a PR that only edits this workflow never runs it, so a
+      # change to the checks themselves is unverifiable until after it has
+      # merged to main -- which is how the two failures this branch fixes
+      # reached main in the first place.
+      - '.github/workflows/test-agentdb.yml'
+  workflow_dispatch:
 
 jobs:
   test-browser-bundle:

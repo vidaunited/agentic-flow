@@ -12,6 +12,10 @@ on:
     branches: [main]
     paths:
       - 'packages/agentic-jujutsu/**'
+      # See the note in test-agentdb.yml: without this, a change to the build
+      # matrix itself cannot be validated until it is already on main. A dead
+      # runner label cost 24h of queued job before anyone could see it.
+      - '.github/workflows/build-agentic-jujutsu.yml'
   workflow_dispatch:
 
 env:
