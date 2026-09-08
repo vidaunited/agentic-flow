@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1788891273287,
+  "lastUpdate": 1788893420269,
   "repoUrl": "https://github.com/vidaunited/agentic-flow",
   "entries": {
     "Benchmark": [
@@ -377,6 +377,60 @@ window.BENCHMARK_DATA = {
           {
             "name": "task-orchestration",
             "value": 83789.968,
+            "unit": "ops/sec"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "mohammed@vimarkets.com",
+            "name": "vidaunited",
+            "username": "vidaunited"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "b23be249f74e73ea1dc5731336e97794b05c9402",
+          "message": "Merge pull request #22 from vidaunited/fix/multiplatform-timeout-cold-cache\n\nfix(ci): restore the multi-platform timeout to 45 — my 20 killed the next run",
+          "timestamp": "2026-09-08T19:21:16+01:00",
+          "tree_id": "14643a7753b40b71322b5b58b52e511571502189",
+          "url": "https://github.com/vidaunited/agentic-flow/commit/b23be249f74e73ea1dc5731336e97794b05c9402"
+        },
+        "date": 1788893419033,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "vector-search-1000",
+            "value": 116271.296,
+            "unit": "ops/sec"
+          },
+          {
+            "name": "vector-search-10000",
+            "value": 103362.752,
+            "unit": "ops/sec"
+          },
+          {
+            "name": "vector-search-100000",
+            "value": 149755.277,
+            "unit": "ops/sec"
+          },
+          {
+            "name": "agent-spawn",
+            "value": 816530.897,
+            "unit": "ops/sec"
+          },
+          {
+            "name": "memory-insert",
+            "value": 404300.153,
+            "unit": "ops/sec"
+          },
+          {
+            "name": "task-orchestration",
+            "value": 64261.471,
             "unit": "ops/sec"
           }
         ]
