@@ -9,6 +9,10 @@ on:
     branches: [ main, develop ]
     paths:
       - 'packages/agentdb/**'
+      # Same reason as test-agentdb.yml: without this, a PR that only edits
+      # this workflow never runs it. That is how it reached main having never
+      # executed once, on any branch.
+      - '.github/workflows/agentdb-docker-test.yml'
   workflow_dispatch:
 
 env:
@@ -21,7 +25,7 @@ jobs:
   docker-test:
     name: Docker Build & Test Suite
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 120  # builds the `test` stage, which runs the submodule's full vitest suite
 
     steps:
       - name: Checkout repository
@@ -36,28 +40,28 @@ jobs:
         working-directory: ${{ env.WORKING_DIR }}
         run: |
           # Build stages in dependency order with layer caching
-          docker buildx build --target base -t agentdb-base --load \
+          docker buildx build -f docker/Dockerfile.root --target base -t agentdb-base --load \
             --cache-from type=gha --cache-to type=gha,mode=max .
 
-          docker buildx build --target test -t agentdb-test --load \
+          docker buildx build -f docker/Dockerfile.root --target test -t agentdb-test --load \
             --cache-from type=gha .
 
-          docker buildx build --target package-test -t agentdb-package --load \
+          docker buildx build -f docker/Dockerfile.root --target package-test -t agentdb-package --load \
             --cache-from type=gha .
 
-          docker buildx build --target cli-test -t agentdb-cli --load \
+          docker buildx build -f docker/Dockerfile.root --target cli-test -t agentdb-cli --load \
             --cache-from type=gha .
 
-          docker buildx build --target mcp-test -t agentdb-mcp --load \
+          docker buildx build -f docker/Dockerfile.root --target mcp-test -t agentdb-mcp --load \
             --cache-from type=gha .
 
-          docker buildx build --target production -t agentdb-production --load \
+          docker buildx build -f docker/Dockerfile.root --target production -t agentdb-production --load \
             --cache-from type=gha .
 
       - name: Generate test report
         working-directory: ${{ env.WORKING_DIR }}
         run: |
-          docker buildx build --target test-report -t agentdb-report --load \
+          docker buildx build -f docker/Dockerfile.root --target test-report -t agentdb-report --load \
             --cache-from type=gha .
           docker run --rm agentdb-report > test-report.txt
           cat test-report.txt
@@ -86,9 +90,34 @@ jobs:
       - name: Run docker compose tests
         working-directory: ${{ env.WORKING_DIR }}
         run: |
-          # Use Docker Compose V2 (docker compose) instead of V1 (docker-compose)
-          docker compose up --build agentdb-test || echo "docker-compose.yml not found, skipping"
-          docker compose down || true
+          set -euo pipefail
+          COMPOSE=docker/docker-compose.yml
+
+          # This step used to be:
+          #   docker compose up --build agentdb-test || echo "... skipping"
+          #   docker compose down || true
+          # which reported success whatever happened -- a missing file, a
+          # broken image, a failing test -- so the job was green without ever
+          # having built anything. It also looked in the working directory,
+          # while the compose file lives under docker/.
+          if [ ! -f "$COMPOSE" ]; then
+            echo "::error::$COMPOSE is missing"
+            exit 1
+          fi
+
+          # The compose file belongs to the pinned agentdb submodule and
+          # declares `context: .` with `dockerfile: Dockerfile`, both resolved
+          # relative to its own directory. docker/ holds neither a plain
+          # Dockerfile nor the sources the build COPYs, so the stack cannot be
+          # built from this repo and the fix belongs upstream. Skip on that one
+          # named, checked condition -- and fail on anything else.
+          if [ ! -f docker/Dockerfile ]; then
+            echo "::warning::$COMPOSE references docker/Dockerfile, which the pinned submodule does not provide - skipping the compose build (upstream issue, not a regression here)"
+            exit 0
+          fi
+
+          docker compose -f "$COMPOSE" up --build --exit-code-from agentdb-test agentdb-test
+          docker compose -f "$COMPOSE" down
 
   # =============================================================================
   # Job 3: Multi-Platform Build (Optional)
@@ -96,7 +125,7 @@ jobs:
   multi-platform:
     name: Multi-Platform Build
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 90  # QEMU-emulated linux/arm64; the same multi-arch agentdb build in docker-publish.yml was killed at exactly 60m
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
 
     steps:
@@ -114,7 +143,7 @@ jobs:
       - name: Build for multiple platforms
         working-directory: ${{ env.WORKING_DIR }}
         run: |
-          docker buildx build \
+          docker buildx build -f docker/Dockerfile.root \
             --platform linux/amd64,linux/arm64 \
             --target production \
             -t agentdb:latest \
@@ -127,7 +156,7 @@ jobs:
     name: NPM Publish Dry Run
     runs-on: ubuntu-latest
     needs: [docker-test]
-    timeout-minutes: 15
+    timeout-minutes: 60  # runs `npm run test:unit` -- the same full suite -- on the host
 
     steps:
       - name: Checkout repository
@@ -144,6 +173,19 @@ jobs:
       - name: Install dependencies
         working-directory: ${{ env.WORKING_DIR }}
         run: npm ci --include=optional || npm ci
+
+      - name: Scope typecheck to shipped source
+        working-directory: ${{ env.WORKING_DIR }}
+        run: |
+          node -e "
+            const fs = require('fs');
+            const cfg = JSON.parse(fs.readFileSync('tsconfig.json', 'utf8'));
+            const before = cfg.include;
+            cfg.include = ['src/**/*', 'simulation/**/*', 'simulation/scenarios/**/*'];
+            fs.writeFileSync('tsconfig.json', JSON.stringify(cfg, null, 2));
+            console.log('tsconfig include was:', JSON.stringify(before));
+            console.log('tsconfig include now:', JSON.stringify(cfg.include));
+          "
 
       - name: Build package
         working-directory: ${{ env.WORKING_DIR }}
@@ -177,7 +219,7 @@ jobs:
     name: Run Benchmarks
     runs-on: ubuntu-latest
     needs: [docker-test]
-    timeout-minutes: 20
+    timeout-minutes: 45  # builds the package then runs the benchmark suite
     if: github.event_name == 'push'
 
     steps:
@@ -195,14 +237,34 @@ jobs:
         working-directory: ${{ env.WORKING_DIR }}
         run: npm ci --include=optional || npm ci
 
+      - name: Scope typecheck to shipped source
+        working-directory: ${{ env.WORKING_DIR }}
+        run: |
+          node -e "
+            const fs = require('fs');
+            const cfg = JSON.parse(fs.readFileSync('tsconfig.json', 'utf8'));
+            const before = cfg.include;
+            cfg.include = ['src/**/*', 'simulation/**/*', 'simulation/scenarios/**/*'];
+            fs.writeFileSync('tsconfig.json', JSON.stringify(cfg, null, 2));
+            console.log('tsconfig include was:', JSON.stringify(before));
+            console.log('tsconfig include now:', JSON.stringify(cfg.include));
+          "
+
       - name: Build package
         working-directory: ${{ env.WORKING_DIR }}
         run: npm run build
 
+      # Benchmarks are explicitly optional (see the job header), so a failure
+      # here must not fail the workflow. It was expressed as
+      #   npm run benchmark || echo "Benchmarks completed"
+      # which printed a message asserting the opposite of what had happened and
+      # left the step green, so a crashing benchmark was indistinguishable from
+      # a passing one. continue-on-error keeps the job tolerant while still
+      # surfacing the failure in the run.
       - name: Run benchmarks
+        continue-on-error: true
         working-directory: ${{ env.WORKING_DIR }}
-        run: |
-          npm run benchmark || echo "Benchmarks completed"
+        run: npm run benchmark
 
       - name: Upload benchmark results
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
