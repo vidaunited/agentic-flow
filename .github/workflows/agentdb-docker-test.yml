@@ -154,12 +154,24 @@ jobs:
   multi-platform:
     name: Multi-Platform Build
     runs-on: ubuntu-latest
-    # MEASURED 2026-09-08 on main run 34256862187: 6m07s (17:24:07 -> 17:30:14),
-    # its first ever completion. The previous 90 was extrapolated from a
-    # DIFFERENT workflow's multi-arch build dying at 60m, and from this job
-    # being cancelled at 46m45s while the vitest suite still ran ahead of it.
-    # 20 is ~3x the real figure, which is ample for QEMU variance.
-    timeout-minutes: 20
+    # 45 because this job's duration is dominated by BUILDX CACHE STATE, not by
+    # the work, and a single sample does not show that.
+    #
+    #   warm cache  run 34256862187  6m07s  (completed)
+    #   cold cache  run 34258929081  KILLED at 20m27s
+    #
+    # I set 20 from the 6m07s run alone, called it "3x headroom", and the very
+    # next run died on it. The log says why: the amd64 side finished at
+    # 17:46:14 and the QEMU-emulated arm64 leg
+    #   #20 [linux/arm64 base 6/6] RUN npm install --include=optional ...
+    # was still running 18m42s later when the wall hit. Slow, not stuck --
+    # emulated npm install is simply expensive, and it only looks fast when the
+    # gha cache is warm.
+    #
+    # 45 (the value this workflow originally shipped with) is >2x the killed
+    # duration and leaves room for a cold cache. Do NOT re-tighten this from one
+    # green run; a warm-cache measurement is not this job's duration.
+    timeout-minutes: 45
     # Was push-to-main only, which made this the one job that could never be
     # run on demand -- so it had no measured duration and its timeout was a
     # guess. A dispatch can now exercise it deliberately.
