@@ -252,14 +252,34 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
+          set -uo pipefail
+          # A failed publish used to be swallowed by `|| echo "Failed to
+          # publish ..."`, so a release could go green having pushed none of
+          # the eight platform packages -- the one failure mode where a silent
+          # pass is most expensive, because the tag looks shipped.
+          #
+          # Re-running a release tag legitimately re-publishes an existing
+          # version, so that specific case is still tolerated; everything else
+          # is collected and fails the job at the end, after attempting all
+          # platforms rather than stopping at the first.
+          failed=""
           for platform in darwin-x64 darwin-arm64 linux-x64-gnu linux-x64-musl linux-arm64-gnu linux-arm64-musl linux-arm-gnueabihf win32-x64-msvc; do
             if [ -f "npm/${platform}/package.json" ]; then
               echo "Publishing agentic-jujutsu-${platform}"
-              cd "npm/${platform}"
-              npm publish --access public || echo "Failed to publish ${platform}"
-              cd ../..
+              if out=$(cd "npm/${platform}" && npm publish --access public 2>&1); then
+                printf '%s\n' "$out"
+              elif printf '%s' "$out" | grep -qiE 'cannot publish over|previously published|EPUBLISHCONFLICT'; then
+                echo "  already published at this version, leaving it alone"
+              else
+                printf '%s\n' "$out"
+                failed="$failed $platform"
+              fi
             fi
           done
+          if [ -n "$failed" ]; then
+            echo "::error::npm publish failed for:$failed"
+            exit 1
+          fi
 
       - name: Update main package version
         working-directory: packages/agentic-jujutsu

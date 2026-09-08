@@ -219,9 +219,13 @@ jobs:
           curl -f http://localhost:8080/health || exit 1
           curl -f http://localhost:9000/health || exit 1
 
+      # This was `docker exec agentic-flow-app npm test || true`, so a step
+      # named "Run integration tests" could not fail and its result was
+      # discarded. The `if: failure()` log-collection steps below it were
+      # therefore unreachable from the tests themselves -- only the health
+      # check could ever trigger them.
       - name: Run integration tests
-        run: |
-          docker exec agentic-flow-app npm test || true
+        run: docker exec agentic-flow-app npm test
 
       - name: Collect logs
         if: failure()
