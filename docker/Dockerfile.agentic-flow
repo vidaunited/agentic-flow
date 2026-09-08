@@ -34,11 +34,25 @@ RUN npm install --omit=dev --ignore-scripts
 # =============================================================================
 FROM base AS builder
 
-# Copy dependencies
-COPY --from=dependencies /app/node_modules ./node_modules
-COPY --from=dependencies /app/package*.json ./
+# Build-time dependencies, installed separately from the runtime set above.
+#
+# Two reasons this cannot reuse the `dependencies` layer:
+#
+#  1. That layer is --omit=dev, and `npm run build` shells into agentic-flow
+#     and runs tsc. typescript is a devDependency in both manifests, so the
+#     build had no compiler at all.
+#  2. The repository root is not an npm workspace, so installing at the root
+#     does not populate agentic-flow/node_modules. The inner build then cannot
+#     resolve its own dependencies (@huggingface/transformers,
+#     @metaharness/router) and picks up the root's older ruvector range
+#     instead of the version it pins.
+COPY package*.json ./
+COPY agentic-flow/package*.json ./agentic-flow/
+RUN npm install --ignore-scripts \
+    && npm --prefix agentic-flow install --ignore-scripts
 
-# Copy source code
+# Copy source code. node_modules is in .dockerignore, so this merges into the
+# tree above without replacing the installs.
 COPY agentic-flow ./agentic-flow
 COPY tsconfig.json ./
 
