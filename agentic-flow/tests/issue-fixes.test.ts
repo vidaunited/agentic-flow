@@ -278,14 +278,11 @@ describe('issue #118 / #119: GNN RuvectorLayer pre-validation', () => {
     expect(layer.forward([1, 0, 0, 0, 0, 0, 0, 0]).length).toBe(4);
   });
 
-  it('agentdb-wrapper-enhanced pre-validates EMBEDDING_DIM % numHeads invariant', () => {
-    const src = readFileSync(
-      join(PKG_INNER, 'src/core/agentdb-wrapper-enhanced.ts'),
-      'utf-8',
-    );
-    // Look for the divisibility check we added.
-    expect(src).toMatch(/% numHeads !== 0|% numHeads\s*!==\s*0/);
-    // And the matching error message points users at the right config knobs.
-    expect(src).toMatch(/RuvectorLayer would panic|must both be divisible/);
-  });
+  // The EMBEDDING_DIM % numHeads assertion that lived here has been removed
+  // along with its subject. src/core/agentdb-wrapper-enhanced.ts was dead code
+  // — nothing imported it, src/core/index.ts did not export it, and it drove
+  // agentdb through controller.store/get/delete, an API that exists in neither
+  // the vendored nor the packaged agentdb. Its divisibility guard was the only
+  // one in the tree, but there is no live RuvectorLayer construction site for
+  // it to protect; if one is added, the guard belongs there.
 });

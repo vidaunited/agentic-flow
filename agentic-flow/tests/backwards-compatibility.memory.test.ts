@@ -205,12 +205,3 @@ describe('Backwards Compatibility - Memory Operations', () => {
     }
   });
 });
-
-describe('Backwards Compatibility - Package Exports', () => {
-  it('should export all expected modules', async () => {
-    const pkg = await import('../src/index.js');
-
-    // Check reasoningbank export
-    expect(pkg.reasoningbank).toBeDefined();
-  });
-});

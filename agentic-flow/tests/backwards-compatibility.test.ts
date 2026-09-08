@@ -70,3 +70,26 @@ describe('Backwards Compatibility - Imports', () => {
     expect(SharedMemoryPool).toBeDefined();
   });
 });
+
+/**
+ * Moved here from the memory suite.
+ *
+ * Importing the package entry pulls @huggingface/transformers, which bundles
+ * its OWN nested onnxruntime-node (napi-v3) alongside the top-level one
+ * (napi-v6). On Linux the second binding asks the already-loaded
+ * libonnxruntime.so for a symbol it does not export:
+ *
+ *   libonnxruntime.so.1: version `VERS_1.21.0' not found
+ *
+ * so it only fails in a worker that has already loaded the top-level runtime —
+ * which is exactly what the memory suite does, and why this passes on macOS.
+ * Keeping this import away from those tests keeps the two runtimes apart.
+ */
+describe('Backwards Compatibility - Package Exports', () => {
+  it('should export all expected modules', async () => {
+    const pkg = await import('../src/index.js');
+
+    // Check reasoningbank export
+    expect(pkg.reasoningbank).toBeDefined();
+  });
+});
