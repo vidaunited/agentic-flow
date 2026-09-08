@@ -11,23 +11,50 @@ on:
       - '.github/workflows/agentdb-docker-test.yml'
   pull_request:
     branches: [ main, develop ]
-    paths:
-      - 'packages/agentdb/**'
-      # Same reason as test-agentdb.yml: without this, a PR that only edits
-      # this workflow never runs it. That is how it reached main having never
-      # executed once, on any branch.
-      - '.github/workflows/agentdb-docker-test.yml'
+    # Deliberately NO paths filter. Measured 2026-09-08: a check that reports
+    # SKIPPED satisfies a required status check, but a check that is ABSENT
+    # leaves the PR pending forever. Path-filtering the trigger makes these
+    # checks absent on most PRs, so they could never be made required. The
+    # filtering moved into the `changes` job below, which is ~10s and lets
+    # every job still report a verdict on every PR.
   workflow_dispatch:
 
 env:
   WORKING_DIR: packages/agentdb
 
 jobs:
+  changes:
+    name: Detect agentdb changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run: ${{ steps.filter.outputs.run }}
+    steps:
+      - name: Does this change touch agentdb?
+        id: filter
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          files=$(gh api "repos/${{ github.repository }}/pulls/${{ github.event.number }}/files" \
+                    --paginate --jq '.[].filename')
+          if printf '%s\n' "$files" | grep -qE '^(packages/agentdb/|\.github/workflows/agentdb-docker-test\.yml$)'; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          fi
+          echo "agentdb touched: $(cat "$GITHUB_OUTPUT")"
+
   # =============================================================================
   # Job 1: Docker Build and Test
   # =============================================================================
   docker-test:
     name: Docker Build & Smoke Tests
+    needs: changes
+    if: needs.changes.outputs.run == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30  # back to its original: the vitest suite it used to build is no longer in this job
 
@@ -78,6 +105,8 @@ jobs:
   # =============================================================================
   docker-compose-test:
     name: Docker Compose Validation
+    needs: changes
+    if: needs.changes.outputs.run == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
