@@ -271,6 +271,24 @@ describe('ReflexionMemoryController', () => {
         shareLevel: 'successful-only' as const
       };
 
+      // The reflexion being shared has to exist; without this the controller
+      // correctly finds nothing and returns before inserting anything. The
+      // sibling test below ('should not share if reflexion is unsuccessful')
+      // already sets its fixture up this way.
+      (mockAgentDB.query as Mock).mockResolvedValue([
+        {
+          content: 'Reflection: write tests first',
+          embedding: new Float32Array(384),
+          metadata: {
+            id: 'reflexion-1',
+            type: 'reflexion',
+            taskId: 'task-1',
+            success: true,
+            reward: 0.9
+          }
+        }
+      ]);
+
       await controller.shareReflexion(shareRequest);
 
       expect(mockAgentDB.insert).toHaveBeenCalledTimes(2);

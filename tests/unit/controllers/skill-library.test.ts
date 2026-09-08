@@ -148,6 +148,21 @@ describe('SkillLibraryController', () => {
         feedback: 'Correctly validated email'
       };
 
+      // recordSkillUsage updates an existing skill's statistics, so the skill
+      // has to exist -- otherwise the controller correctly returns without
+      // writing. The sibling test below sets its fixture up the same way.
+      (mockAgentDB.query as Mock).mockResolvedValue([
+        {
+          metadata: {
+            skillId: 'input-validation',
+            type: 'skill',
+            version: '1.0.0',
+            successRate: 0.8,
+            usageCount: 4
+          }
+        }
+      ]);
+
       await controller.recordSkillUsage(usage);
 
       expect(mockAgentDB.update).toHaveBeenCalled();
@@ -184,6 +199,21 @@ describe('SkillLibraryController', () => {
           { input: 'user@übung.de', expected: true }
         ]
       };
+
+      // The skill being evolved has to exist, and has to carry the version the
+      // new one records as its parent.
+      (mockAgentDB.query as Mock).mockResolvedValue([
+        {
+          metadata: {
+            skillId: 'input-validation',
+            type: 'skill',
+            version: '1.0.0',
+            name: 'Input validation',
+            description: 'Validates user input',
+            code: 'function validate(input) { /* old code */ }'
+          }
+        }
+      ]);
 
       await controller.evolveSkill(evolution);
 
