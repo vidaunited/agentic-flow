@@ -59,8 +59,15 @@ COPY agentic-flow/package*.json ./agentic-flow/
 RUN npm install --ignore-scripts \
     && npm --prefix agentic-flow install --ignore-scripts
 
-# Copy source code. node_modules is in .dockerignore, so this merges into the
-# tree above without replacing the installs.
+# Copy source code. This merges into the tree above without replacing the
+# installs, because of the `**/node_modules` pattern in the root .dockerignore
+# specifically. The bare `node_modules/` line next to it does NOT cover this
+# path: bare patterns are root-anchored, so it excludes only ./node_modules and
+# leaves agentic-flow/node_modules in the build context - verified with a
+# `FROM scratch` + `COPY . /` probe, not assumed. Without `**/node_modules` a
+# developer's host agentic-flow/node_modules (wrong architecture, possibly
+# stale) would overwrite files in the tree npm just installed here. CI checkouts
+# carry no node_modules, which is why that never surfaced.
 COPY agentic-flow ./agentic-flow
 COPY tsconfig.json ./
 

@@ -3,6 +3,21 @@
 # 150x faster vector database with ReasoningBank learning
 # =============================================================================
 
+# The version of the pinned packages/agentdb submodule. Declared before the
+# first FROM so it is global, and re-declared bare inside each stage that uses
+# it (an ARG's value is not inherited into a stage otherwise). The build stage
+# asserts this matches package.json and fails the build if it does not, so the
+# label below can no longer silently go stale the way the hardcoded
+# "2.0.0-alpha" did - a whole major version behind the 3.0.0-alpha.14 the
+# submodule actually pinned. The "Build and run the published agentdb image"
+# step in .github/workflows/agentdb-docker-test.yml builds this image on every
+# PR that touches packages/agentdb/ or this file - which is exactly the set that
+# can cause the drift - so a submodule bump that forgets to update this default
+# is caught there automatically. That step builds `--target production`, which
+# COPYs --from=build, so the assertion runs even though the build stage is not
+# the targeted one.
+ARG AGENTDB_VERSION=3.0.0-alpha.14
+
 FROM node:20-alpine AS base
 
 # Install system dependencies
@@ -44,15 +59,33 @@ RUN npm install --omit=dev --include=optional
 # =============================================================================
 FROM base AS build
 
+# Re-declared bare so the global ARG's value is visible in this stage.
+ARG AGENTDB_VERSION
+
 COPY packages/agentdb ./
 
-# The build context is the repository ROOT, and the root .dockerignore's
-# `node_modules/` and `dist/` patterns are anchored there - they do not match
-# packages/agentdb/node_modules or packages/agentdb/dist, so a developer's local
-# ones travel into the context and land here. Discard them: host-built native
-# modules are for the wrong platform, and a stale dist/ would let a failed
-# compile below ship as a success.
+# The build context is the repository ROOT. The root .dockerignore's `dist/`
+# pattern is anchored there, so it does NOT match packages/agentdb/dist: a
+# developer's local dist/ still travels into the context and lands here, and a
+# stale one would let a failed compile below ship as a success. node_modules is
+# now covered - the `**/node_modules` pattern added alongside `node_modules/`
+# does exclude packages/agentdb/node_modules at every depth - so that half of
+# this rm is defence-in-depth rather than load-bearing. It is kept anyway: it
+# costs nothing, and it keeps this stage correct if the build context is ever
+# assembled by something other than the root .dockerignore.
 RUN rm -rf node_modules dist
+
+# Fail loudly if the ARG default has drifted from the pinned submodule, rather
+# than publishing an image whose version label lies. Compared against the value
+# node itself reports from package.json, which is the same thing the runtime
+# resolves.
+RUN ACTUAL="$(node -p 'require("./package.json").version')"; \
+    if [ "$ACTUAL" != "$AGENTDB_VERSION" ]; then \
+        echo "ERROR: AGENTDB_VERSION build arg is '$AGENTDB_VERSION' but packages/agentdb/package.json reports '$ACTUAL'." >&2; \
+        echo "Update the ARG AGENTDB_VERSION default in docker/Dockerfile.agentdb to match the pinned submodule." >&2; \
+        exit 1; \
+    fi; \
+    echo "AGENTDB_VERSION verified: $ACTUAL"
 
 # Same install as every job in .github/workflows/agentdb-docker-test.yml:
 # --include=optional picks up the native accelerators when the lockfile has
@@ -89,6 +122,10 @@ RUN test -f dist/src/index.js && test -f dist/src/cli/agentdb-cli.js
 # Production Stage
 # =============================================================================
 FROM node:20-alpine AS production
+
+# Re-declared bare so the global ARG's value is visible in this stage too; the
+# build stage's re-declaration does not carry across.
+ARG AGENTDB_VERSION
 
 RUN apk add --no-cache \
     bash \
@@ -134,7 +171,7 @@ CMD ["node", "dist/src/cli/agentdb-cli.js", "--help"]
 LABEL maintainer="ruv <contact@ruv.io>"
 LABEL org.opencontainers.image.title="AgentDB"
 LABEL org.opencontainers.image.description="150x faster vector database with ReasoningBank learning"
-LABEL org.opencontainers.image.version="2.0.0-alpha"
+LABEL org.opencontainers.image.version="${AGENTDB_VERSION}"
 LABEL org.opencontainers.image.source="https://github.com/ruvnet/agentic-flow"
 
 # No EXPOSE. agentdb is an embedded/CLI vector database and this image starts no
