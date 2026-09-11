@@ -13,6 +13,13 @@ on:
       # Dockerfile lives outside packages/agentdb, so without this line a change
       # to it matched nothing here and went straight to docker-publish.yml.
       - 'docker/Dockerfile.agentdb'
+      # The root .dockerignore decides what reaches the build context for that
+      # Dockerfile, so it can break this image's build on its own. Same gap the
+      # Dockerfile line above closes: without this, a PR touching only
+      # .dockerignore would never build the image it governs. Only the ROOT one
+      # -- the build context is the repository root, so nested .dockerignore
+      # files (packages/agentic-llm/, and the submodule's own) do not apply.
+      - '.dockerignore'
   pull_request:
     branches: [ main, develop ]
     # Deliberately NO paths filter. Measured 2026-09-08: a check that reports
@@ -45,7 +52,7 @@ jobs:
           fi
           files=$(gh api "repos/${{ github.repository }}/pulls/${{ github.event.number }}/files" \
                     --paginate --jq '.[].filename')
-          if printf '%s\n' "$files" | grep -qE '^(packages/agentdb/|docker/Dockerfile\.agentdb$|\.github/workflows/agentdb-docker-test\.yml$)'; then
+          if printf '%s\n' "$files" | grep -qE '^(packages/agentdb/|docker/Dockerfile\.agentdb$|\.dockerignore$|\.github/workflows/agentdb-docker-test\.yml$)'; then
             echo "run=true" >> "$GITHUB_OUTPUT"
           else
             echo "run=false" >> "$GITHUB_OUTPUT"
