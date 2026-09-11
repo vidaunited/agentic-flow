@@ -1,5 +1,13 @@
 # Dependencies
 node_modules/
+# Bare patterns are ROOT-ANCHORED with no implicit recursion, so the line above
+# matches only ./node_modules - verified with a `FROM scratch` + `COPY . /` probe
+# of this exact file, in which agentic-flow/node_modules and
+# packages/agentdb/node_modules both survived into the build context. `**/` is
+# what excludes them at every depth. No Dockerfile built by docker-publish.yml
+# COPYs node_modules from the context (only `COPY --from=` stage copies), so this
+# is safe for all four images.
+**/node_modules
 npm-debug.log
 yarn-error.log
 package-lock.json
