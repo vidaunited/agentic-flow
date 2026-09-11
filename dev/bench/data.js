@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1789111029931,
+  "lastUpdate": 1789147459583,
   "repoUrl": "https://github.com/vidaunited/agentic-flow",
   "entries": {
     "Benchmark": [
@@ -641,6 +641,60 @@ window.BENCHMARK_DATA = {
           {
             "name": "task-orchestration",
             "value": 94950.477,
+            "unit": "ops/sec"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "mohammed@vimarkets.com",
+            "name": "vidaunited",
+            "username": "vidaunited"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "69545fd07deaf1fccfd73efd18da9c5ca1c7959e",
+          "message": "Merge pull request #24 from vidaunited/claude/agentdb-docker-0l3yto\n\nfix(docker): stop the version label drifting, make the .dockerignore claim true, and test it\n\nVerified in CI on f510adb: the agentdb image builds through every stage\nand runs, with the AGENTDB_VERSION assertion and the tightened\n.dockerignore both exercised by the build.",
+          "timestamp": "2026-09-11T18:00:45+01:00",
+          "tree_id": "2d17c50f9003a5b50eaee6a674c2b1b2a990fb4a",
+          "url": "https://github.com/vidaunited/agentic-flow/commit/69545fd07deaf1fccfd73efd18da9c5ca1c7959e"
+        },
+        "date": 1789147458631,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "vector-search-1000",
+            "value": 152999.385,
+            "unit": "ops/sec"
+          },
+          {
+            "name": "vector-search-10000",
+            "value": 217479.525,
+            "unit": "ops/sec"
+          },
+          {
+            "name": "vector-search-100000",
+            "value": 188998.832,
+            "unit": "ops/sec"
+          },
+          {
+            "name": "agent-spawn",
+            "value": 1934309.308,
+            "unit": "ops/sec"
+          },
+          {
+            "name": "memory-insert",
+            "value": 521282.396,
+            "unit": "ops/sec"
+          },
+          {
+            "name": "task-orchestration",
+            "value": 151268.424,
             "unit": "ops/sec"
           }
         ]
